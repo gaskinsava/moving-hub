@@ -478,7 +478,10 @@ function renderHome(){
           · ${S.events.length} milestone${S.events.length===1?'':'s'}
         </div>
       </div>
-      <span class="pill" style="color:var(--good);background:color-mix(in srgb,var(--good) 15%,transparent);border-color:transparent;font-weight:700;">🏁 ${moveChip}</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="pill" style="color:var(--good);background:color-mix(in srgb,var(--good) 15%,transparent);border-color:transparent;font-weight:700;">🏁 ${moveChip}</span>
+        <button class="btn primary mini" onclick="openEvent()">+ Milestone</button>
+      </div>
     </div>
     ${hTimeline(tlItems)}
   </div>
@@ -809,6 +812,22 @@ function openListing(){ modal(`<h3>Add listing</h3><div class="fg">
   <label class="f full">Link<input id="ls_link" placeholder="https://"></label></div>
   <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveListing()">Add</button></div>`); }
 function saveListing(){ const t=gv("ls_title").trim(); if(!t)return alert("Item required"); S.listings.push({id:uid(),title:t,owner:gv("ls_owner"),platform:gv("ls_plat"),price:+gv("ls_price")||0,link:gv("ls_link"),sold:false}); closeModal(); render(); }
+
+function openEvent(){
+  const evs=[...S.events].sort((a,b)=>a.date.localeCompare(b.date));
+  modal(`<h3>Timeline milestones</h3>
+    <p class="muted" style="margin-top:-8px;font-size:12.5px;">Add the key dates on your move-in timeline.</p>
+    <div class="fg">
+      <label class="f full">What's happening<input id="ev_title" placeholder="e.g. Sign new lease"></label>
+      <label class="f">Date<input id="ev_date" type="date" value="2026-08-01"></label>
+      <label class="f">Type<select id="ev_type"><option value="apartments">Apartment</option><option value="movers">Movers</option><option value="flights">Flights</option><option value="car">Cars</option><option value="other">Other</option></select></label>
+    </div>
+    <button class="btn primary" style="margin-top:12px;width:100%" onclick="saveEvent()">+ Add milestone</button>
+    <div style="margin-top:16px;">${evs.length?`<div class="eyebrow" style="margin-bottom:6px;">On your timeline</div>`+evs.map(e=>`<div class="row-between" style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor(e.type)};margin-right:8px"></i>${fmtShort(e.date)} · ${e.title}</span><button class="del" onclick="delEvent('${e.id}')">×</button></div>`).join(""):`<div class="empty" style="padding:14px">No milestones yet</div>`}</div>
+    <div class="row-between" style="margin-top:16px;"><span></span><button class="btn ghost" onclick="closeModal()">Done</button></div>`);
+}
+function saveEvent(){ const t=gv("ev_title").trim(); if(!t)return alert("Title required"); S.events.push({id:uid(),title:t,date:y2026(gv("ev_date")),type:gv("ev_type")}); render(); openEvent(); }
+function delEvent(id){ S.events=S.events.filter(e=>e.id!==id); render(); openEvent(); }
 
 function openTodo(){ modal(`<h3>Add task</h3><div class="fg">
   <label class="f full">Task<input id="td_text"></label>
