@@ -109,7 +109,9 @@ label.f{ display:flex; flex-direction:column; gap:5px; font-size:11px; font-weig
 .htl-track{ position:absolute; height:3px; background:var(--border-2); border-radius:2px; }
 .htl-fill{ position:absolute; left:0; top:0; height:100%; background:var(--good); border-radius:2px; }
 .htl-node{ position:absolute; transform:translateX(-50%); z-index:3; }
-.htl-node i{ display:block; width:13px; height:13px; border-radius:50%; border:2.5px solid var(--panel); box-shadow:0 0 0 1px var(--border-2); }
+.htl-node i{ display:block; width:13px; height:13px; border-radius:50%; border:2.5px solid var(--panel); box-shadow:0 0 0 1px var(--border-2); cursor:pointer; }
+.htl-node .htl-tip{ position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel-3); color:var(--text); border:1px solid var(--border-2); padding:3px 9px; border-radius:7px; font-size:11px; font-weight:700; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .12s; z-index:6; box-shadow:0 4px 12px rgba(0,0,0,.35); }
+.htl-node:hover .htl-tip{ opacity:1; }
 .htl-conn{ position:absolute; width:2px; background:var(--border-2); transform:translateX(-50%); z-index:1; }
 .htl-lab{ position:absolute; width:106px; transform:translateX(-50%); text-align:center; z-index:2; background:var(--panel); padding:1px 3px; border-radius:5px; }
 .htl-lab.diag{ transform-origin:left top; transform:rotate(38deg); white-space:nowrap; width:auto; text-align:left; background:none; padding:0; }
@@ -428,7 +430,8 @@ function hTimeline(items, endDate){
   const trackY=24, height=trackY+150;
   const nowF=fracOf(now);
   const nodes=sorted.map(it=>{ const f=fracOf(parseD(it.date).getTime());
-    return `<div class="htl-node" style="left:${x(f)};top:${trackY}px"><i style="background:${it.color}"></i></div><div class="htl-lab diag" style="left:${x(f)};top:${trackY+13}px"><span class="d">${fmtShort(it.date)}</span><span class="t">${it.title}</span></div>`; }).join("");
+    const dd=daysTo(it.date); const dl=dd>0?`${dd} day${dd===1?'':'s'} away`:dd===0?"today":`${Math.abs(dd)} day${Math.abs(dd)===1?'':'s'} ago`;
+    return `<div class="htl-node" style="left:${x(f)};top:${trackY}px"><i style="background:${it.color}"></i><span class="htl-tip">${dl}</span></div><div class="htl-lab diag" style="left:${x(f)};top:${trackY+13}px"><span class="d">${fmtShort(it.date)}</span><span class="t">${it.title}</span></div>`; }).join("");
   return `<div class="htl-scroll" style="overflow:visible"><div class="htl" style="width:100%;height:${height}px">
     <div class="htl-track" style="top:${trackY+5}px;left:${pad}px;right:${pad}px"><div class="htl-fill" style="width:${nowF*100}%"></div></div>
     <div class="htl-now" style="left:${x(nowF)};top:${trackY}px"><div class="dot"></div><div class="now-lab">NOW</div></div>
