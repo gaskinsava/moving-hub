@@ -464,12 +464,19 @@ function renderHome(){
   const openTodos=S.todos.filter(t=>t.status!=="done"&&(UI.view==="group"||t.owner===UI.view||t.owner==="both"));
   const tlItems=S.events.map(ev=>({date:ev.date,title:ev.title,color:eventColor(ev.type)}));
   const evByDate={}; S.events.forEach(ev=>{ (evByDate[ev.date]=evByDate[ev.date]||[]).push({text:ev.title,color:eventColor(ev.type)}); });
-  const dMove=daysTo(S.move.moveDate);
-  const moveChip=dMove>=0?`${dMove} days to move-in`:`moved in ${Math.abs(dMove)}d ago`;
+  const dMove=S.move.moveDate?daysTo(S.move.moveDate):null;
+  const moveChip=S.move.moveDate?(dMove>=0?`${dMove} days to move-in`:`moved in ${Math.abs(dMove)}d ago`):"add your move-in date →";
   return `
   <div class="card pad">
-    <div class="row-between" style="margin-bottom:2px;">
-      <div><div class="eyebrow">The road to move-in</div><div class="tag" style="margin-top:3px;">${S.move.origin} → ${S.move.destination} · ${S.events.length} milestones</div></div>
+    <div class="row-between" style="margin-bottom:2px;gap:12px;flex-wrap:wrap;">
+      <div><div class="eyebrow">The road to move-in</div>
+        <div class="tag" style="margin-top:4px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+          From <input class="bare" style="width:100px" value="${S.move.origin||''}" placeholder="origin" onchange="setMove('origin',this.value)">
+          → <input class="bare" style="width:100px" value="${S.move.destination||''}" placeholder="destination" onchange="setMove('destination',this.value)">
+          · move-in <input class="bare" type="date" style="width:140px" value="${S.move.moveDate||''}" onchange="setMove('moveDate',this.value)">
+          · ${S.events.length} milestone${S.events.length===1?'':'s'}
+        </div>
+      </div>
       <span class="pill" style="color:var(--good);background:color-mix(in srgb,var(--good) 15%,transparent);border-color:transparent;font-weight:700;">🏁 ${moveChip}</span>
     </div>
     ${hTimeline(tlItems)}
@@ -517,6 +524,7 @@ function budgetGlanceRows(){
 function earnMini(who){ const e=earnings(who),p=e.pot>0?Math.round(e.sold/e.pot*100):0;
   return `<div><div class="row-between" style="margin-bottom:6px;"><span class="pill ${who}">${PEOPLE[who]}</span><span class="display" style="font-size:20px;color:var(--good)">${money(e.sold)}</span></div><div class="progress"><span style="width:${p}%;background:var(--${who})"></span></div><div class="tag" style="margin-top:5px;">${money(e.pot-e.sold)} still listed</div></div>`; }
 function navHome(d){ let m=homeCal.m+d,y=homeCal.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} homeCal={y,m}; render(); }
+function setMove(f,v){ S.move[f]=v; render(); }
 
 /* ============ APARTMENTS ============ */
 function aptScore(a,who){ let got=0,max=0; S.criteria.forEach(cr=>{max+=cr[who]; if(a.met&&a.met[cr.id])got+=cr[who];}); return max?Math.round(got/max*100):0; }
@@ -854,7 +862,18 @@ document.getElementById("authSubmit").onclick=doAuth;
 document.getElementById("authPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doAuth(); });
 
 /* ---- Boot / hub load ---- */
-function seedHub(){ const s=structuredClone(seed); s.name="Our Move"; return s; }
+function seedHub(){ return {
+  name:"Our Move",
+  move:{ origin:"Greenville, NC", destination:"Los Angeles", moveDate:"" },
+  crew:{ ava:"Ava", gab:"Gab" },
+  criteria:[
+    {id:"c1",label:"In budget",ava:5,gab:5},{id:"c2",label:"Parking",ava:3,gab:5},
+    {id:"c3",label:"In-unit laundry",ava:5,gab:2},{id:"c4",label:"Pet friendly",ava:4,gab:4},
+    {id:"c5",label:"Natural light",ava:5,gab:3},{id:"c6",label:"Near transit",ava:2,gab:4},
+    {id:"c7",label:"Walkable area",ava:4,gab:3},{id:"c8",label:"Outdoor space",ava:3,gab:2}
+  ],
+  apartments:[], friends:[], budget:[], quotes:[], listings:[], todos:[], packing:[], events:[]
+}; }
 function setCrewNames(){ PEOPLE.ava=(S&&S.crew&&S.crew.ava)||"Ava"; PEOPLE.gab=(S&&S.crew&&S.crew.gab)||"Gab"; }
 async function boot(){
   const { data:{ session } } = await sb.auth.getSession();
