@@ -99,6 +99,9 @@ label.f{ display:flex; flex-direction:column; gap:5px; font-size:11px; font-weig
 .row-between{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .muted{ color:var(--muted); } .tag{ font-size:11px; color:var(--muted); }
 .del{ color:var(--warn); cursor:pointer; background:none; border:none; font-size:16px; padding:2px 7px; border-radius:6px; line-height:1; }
+.drag{ cursor:grab; color:var(--faint); user-select:none; margin-right:6px; font-size:13px; display:inline-block; }
+.drag:hover{ color:var(--muted); } .drag:active{ cursor:grabbing; }
+.dropok{ box-shadow: inset 0 2px 0 0 var(--accent) !important; }
 .del:hover{ background:color-mix(in srgb,var(--warn) 14%,transparent); }
 .empty{ text-align:center; color:var(--muted); padding:26px; }
 .money{ font-variant-numeric:tabular-nums; }
@@ -398,6 +401,17 @@ function pillSel(value,opts,color,onchange){ return `<select class="pillsel" sty
 function sel(value,opts,onchange){ return `<select class="sel" onchange="${onchange}">${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o}</option>`).join("")}</select>`; }
 function stPill(status,click){ const s=stById(status); return `<span class="pill ${click?'click':''}" style="color:${s.color};background:color-mix(in srgb,${s.color} 16%,transparent);border-color:transparent" ${click?`onclick="${click}"`:''}>${s.label}</span>`; }
 
+/* ============ Drag-to-reorder ============ */
+let dragCtx=null;
+function dragHandle(list,id){ return `<span class="drag" draggable="true" ondragstart="dragStart(event,'${list}','${id}')" ondragend="dragEnd()" title="Drag to reorder">⠿</span>`; }
+function dragStart(e,list,id){ dragCtx={list,id}; e.dataTransfer.effectAllowed="move"; try{ e.dataTransfer.setData("text/plain",id); }catch(_){ } }
+function dragEnd(){ document.querySelectorAll(".dropok").forEach(el=>el.classList.remove("dropok")); dragCtx=null; }
+function dragOver(e,el){ if(!dragCtx) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; if(el&&!el.classList.contains("dropok")){ document.querySelectorAll(".dropok").forEach(x=>x.classList.remove("dropok")); el.classList.add("dropok"); } }
+function dragDrop(e,list,targetId,reassign){ e.preventDefault(); const ctx=dragCtx; dragEnd(); if(!ctx||ctx.list!==list||ctx.id===targetId) return; const arr=S[list]; if(!arr) return;
+  const from=arr.findIndex(x=>x.id===ctx.id); if(from<0) return; const [it]=arr.splice(from,1);
+  const t=arr.find(x=>x.id===targetId); if(reassign&&t) it[reassign]=t[reassign];
+  let to=arr.findIndex(x=>x.id===targetId); if(to<0) to=arr.length; arr.splice(to,0,it); render(); }
+
 /* ============ Render root ============ */
 let tab="home", mapObj=null;
 let todoCal={y:2026,m:6}, homeCal={y:2026,m:7};
@@ -541,8 +555,8 @@ function renderApartments(){
   </div>`;
 }
 function aptFront(a,sa,sg){
-  return `<div class="card apt">
-    <div class="row-between"><div><strong>${a.link?`<a href="${a.link}" target="_blank" rel="noopener">${a.name} ↗</a>`:a.name}</strong> <span class="price">— ${money(a.price)}</span><div class="addr">${a.neighborhood} · ${money(aptTotal(a))}/mo all-in</div></div><button class="del" onclick="delApt('${a.id}')">×</button></div>
+  return `<div class="card apt" ondragover="dragOver(event,this)" ondrop="dragDrop(event,'apartments','${a.id}')">
+    <div class="row-between"><div>${dragHandle('apartments',a.id)}<strong>${a.link?`<a href="${a.link}" target="_blank" rel="noopener">${a.name} ↗</a>`:a.name}</strong> <span class="price">— ${money(a.price)}</span><div class="addr">${a.neighborhood} · ${money(aptTotal(a))}/mo all-in</div></div><button class="del" onclick="delApt('${a.id}')">×</button></div>
     ${sa?scoreRow("Ava","ava",aptScore(a,"ava")):""}${sg?scoreRow("Gab","gab",aptScore(a,"gab")):""}
     <div class="checks">${S.criteria.map(cr=>`<span class="chk ${a.met&&a.met[cr.id]?'on':''}" onclick="toggleMet('${a.id}','${cr.id}')">${a.met&&a.met[cr.id]?'✓':'○'} ${cr.label}</span>`).join("")}</div>
     <div class="pc"><div><span class="pill good">Pros</span><ul>${a.pros.map(p=>`<li>${p}</li>`).join("")||"<li class='muted'>—</li>"}</ul></div>
@@ -612,8 +626,8 @@ function renderBudgetCat(c,group){
     const pc=li.payer==="split"?"var(--both)":`var(--${li.payer})`;
     const payerSel=pillSel(li.payer,[{v:"split",label:"Split"},{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab}],pc,`setPayer('${li.id}',this.value)`);
     const statSel=pillSel(li.paid?"paid":"unpaid",[{v:"unpaid",label:"Unpaid"},{v:"paid",label:"Paid"}],li.paid?"var(--good)":"var(--warn)",`setPaid('${li.id}',this.value)`);
-    if(group){ return `<tr>
-      <td class="l"><input class="bare" value="${li.label}" onchange="setLine('${li.id}','label',this.value)"></td>
+    if(group){ return `<tr ondragover="dragOver(event,this)" ondrop="dragDrop(event,'budget','${li.id}','cat')">
+      <td class="l">${dragHandle('budget',li.id)}<input class="bare" style="width:calc(100% - 22px)" value="${li.label}" onchange="setLine('${li.id}','label',this.value)"></td>
       <td><input class="bare numin money" value="${money(li.est)}" onchange="setLineMoney('${li.id}','est',this.value)"></td>
       <td><input class="bare numin money" value="${money(li.act)}" onchange="setLineMoney('${li.id}','act',this.value)"></td>
       <td>${payerSel}</td><td>${statSel}</td><td><button class="del" onclick="delLine('${li.id}')">×</button></td></tr>`; }
@@ -636,12 +650,12 @@ function addLine(cat){ S.budget.push({id:uid(),cat,label:"New line item",est:0,a
 /* ============ QUOTES ============ */
 function renderQuotes(){
   return ["Movers","Car shipping"].map(type=>{
-    const qs=S.quotes.filter(q=>q.type===type).sort((a,b)=>a.price-b.price); const min=Math.min(...qs.map(q=>q.price));
+    const qs=S.quotes.filter(q=>q.type===type); const min=Math.min(...qs.map(q=>q.price));
     return `<div class="section-label eyebrow">${type} quotes</div>
     <div class="card" style="overflow:hidden;margin-bottom:8px;"><table class="btable">
       <thead class="bhead"><tr><th class="l">Company</th><th>Price</th><th>Rating</th><th class="l">Notes</th><th>Pick</th><th></th></tr></thead>
-      <tbody>${qs.map(q=>`<tr>
-        <td class="l"><strong>${q.company}</strong>${q.link?` <a href="${q.link}" target="_blank">↗</a>`:""}</td>
+      <tbody>${qs.map(q=>`<tr ondragover="dragOver(event,this)" ondrop="dragDrop(event,'quotes','${q.id}','type')">
+        <td class="l">${dragHandle('quotes',q.id)}<strong>${q.company}</strong>${q.link?` <a href="${q.link}" target="_blank">↗</a>`:""}</td>
         <td class="money">${money(q.price)} ${q.price===min?'<span class="pill good">lowest</span>':''}</td>
         <td>${"★".repeat(Math.round(q.rating))}<span class="tag"> ${q.rating}</span></td>
         <td class="l muted">${q.note||"—"}</td>
@@ -663,8 +677,8 @@ function renderListings(){
   <div class="row-between section-label"><div class="eyebrow">Listings — click any field to edit</div><button class="btn primary mini" onclick="openListing()">+ Add listing</button></div>
   <div class="card" style="overflow:hidden;"><table class="btable">
     <thead class="bhead"><tr><th class="l">Item</th><th class="l">Seller</th><th class="l">Platform</th><th>Price</th><th class="l">Link</th><th>Status</th><th></th></tr></thead>
-    <tbody>${rows.map(l=>`<tr>
-      <td class="l"><input class="bare" value="${l.title}" onchange="setListing('${l.id}','title',this.value)"></td>
+    <tbody>${rows.map(l=>`<tr ondragover="dragOver(event,this)" ondrop="dragDrop(event,'listings','${l.id}')">
+      <td class="l">${dragHandle('listings',l.id)}<input class="bare" style="width:calc(100% - 22px)" value="${l.title}" onchange="setListing('${l.id}','title',this.value)"></td>
       <td class="l">${pillSel(l.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab}],`var(--${l.owner})`,`setListing('${l.id}','owner',this.value)`)}</td>
       <td class="l">${sel(l.platform,["Facebook","Depop","Craigslist","OfferUp","Poshmark"],`setListing('${l.id}','platform',this.value)`)}</td>
       <td><input class="bare numin money" style="width:80px" value="${money(l.price)}" onchange="setListingMoney('${l.id}',this.value)"></td>
@@ -697,8 +711,8 @@ function renderTodo(){
   <div class="row-between section-label"><div class="eyebrow">Tasks</div><button class="btn primary mini" onclick="openTodo()">+ Add task</button></div>
   <div class="card" style="overflow:hidden;"><table class="btable">
     <thead class="bhead"><tr><th class="l">Task</th><th class="l">Status</th><th class="l">Category</th><th class="l">Owner</th><th class="l">Deadline</th><th></th></tr></thead>
-    <tbody>${rows.map(t=>`<tr>
-      <td class="l"><input class="bare" value="${t.text}" onchange="setTodo('${t.id}','text',this.value)"></td>
+    <tbody>${rows.map(t=>`<tr ondragover="dragOver(event,this)" ondrop="dragDrop(event,'todos','${t.id}')">
+      <td class="l">${dragHandle('todos',t.id)}<input class="bare" style="width:calc(100% - 22px)" value="${t.text}" onchange="setTodo('${t.id}','text',this.value)"></td>
       <td class="l">${pillSel(t.status,STATUSES.map(s=>({v:s.id,label:s.label})),stById(t.status).color,`setTodo('${t.id}','status',this.value)`)}</td>
       <td class="l">${sel(t.cat,TODO_CATS,`setTodo('${t.id}','cat',this.value)`)}</td>
       <td class="l">${pillSel(t.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab},{v:"both",label:"Both"}],ownerColor(t.owner),`setTodo('${t.id}','owner',this.value)`)}</td>
@@ -727,7 +741,8 @@ function renderPacking(){
     const rb=boxes.filter(b=>b.room===room);
     return `<div class="card pad room">
       <h3><span class="catdot" style="background:var(--teal)"></span>${room} <span class="tag" style="font-weight:500;text-transform:none;letter-spacing:0">${rb.length} box${rb.length===1?'':'es'}</span><button class="del" style="margin-left:auto" title="Remove room" onclick="delRoom('${esc(room)}')">×</button></h3>
-      ${rb.map(b=>`<div class="box">
+      ${rb.map(b=>`<div class="box" ondragover="dragOver(event,this)" ondrop="dragDrop(event,'packing','${b.id}','room')">
+        ${dragHandle('packing',b.id)}
         <div class="cbox ${b.packed?'on':''}" onclick="setBox('${b.id}','packed',${!b.packed})" style="width:19px;height:19px;border-radius:6px;border:1.5px solid var(--border-2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;${b.packed?'background:var(--good);border-color:var(--good)':''}">${b.packed?'✓':''}</div>
         <div class="bx-main">
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><input class="bare" style="width:110px;font-weight:600" value="${b.label}" onchange="setBox('${b.id}','label',this.value)">${pillSel(b.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab},{v:"both",label:"Both"}],ownerColor(b.owner),`setBox('${b.id}','owner',this.value)`)}${sel(b.room,rooms,`setBox('${b.id}','room',this.value)`)}</div>
