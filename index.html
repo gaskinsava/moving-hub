@@ -414,32 +414,24 @@ function render(){
 const vname=()=>UI.view==="group"?"both of you":PEOPLE[UI.view];
 
 /* ============ Timeline (proportional, no-overlap labels) ============ */
-function hTimeline(items){
+function hTimeline(items, endDate){
   if(!items.length) return `<div class="empty">No dated items yet</div>`;
   const sorted=[...items].sort((a,b)=>a.date.localeCompare(b.date));
-  const n=sorted.length;
   const times=sorted.map(i=>parseD(i.date).getTime());
   const now=TODAY.getTime();
   let min=Math.min(...times,now), max=Math.max(...times,now);
+  if(endDate){ const e=parseD(endDate).getTime(); if(e>max) max=e; }   // stretch to the move-in date
   if(max===min) max=min+86400000;
-  const pad=60, baseW=Math.max(720,n*150), span=baseW-2*pad;
-  const xOf=t=>pad+(t-min)/(max-min)*span;
-  const xs=sorted.map(it=>xOf(parseD(it.date).getTime()));
-  const gaps=xs.slice(1).map((x,i)=>x-xs[i]);
-  const minGap=gaps.length?Math.min(...gaps):999;
-  const diag=minGap<115;                     // rotate labels diagonally when dots are close together
-  const trackY=24, nowX=xOf(now);
-  let W,height,nodes;
-  if(diag){
-    W=baseW+160; height=trackY+150;
-    nodes=sorted.map((it,i)=>`<div class="htl-node" style="left:${xs[i]}px;top:${trackY}px"><i style="background:${it.color}"></i></div><div class="htl-lab diag" style="left:${xs[i]}px;top:${trackY+13}px"><span class="d">${fmtShort(it.date)}</span><span class="t">${it.title}</span></div>`).join("");
-  } else {
-    W=baseW; height=trackY+60;
-    nodes=sorted.map((it,i)=>`<div class="htl-node" style="left:${xs[i]}px;top:${trackY}px"><i style="background:${it.color}"></i></div><div class="htl-lab" style="left:${xs[i]}px;top:${trackY+16}px"><div class="d">${fmtShort(it.date)}</div><div class="t">${it.title}</div></div>`).join("");
-  }
-  return `<div class="htl-scroll"><div class="htl" style="width:${W}px;height:${height}px">
-    <div class="htl-track" style="top:${trackY+5}px;left:${pad}px;width:${span}px"><div class="htl-fill" style="width:${Math.max(0,Math.min(span,nowX-pad))}px"></div></div>
-    <div class="htl-now" style="left:${nowX}px;top:${trackY}px"><div class="dot"></div><div class="now-lab">NOW</div></div>
+  const pad=70;                                                        // px inset on each side of the track
+  const fracOf=t=>Math.max(0,Math.min(1,(t-min)/(max-min)));
+  const x=f=>`calc(${pad}px + (100% - ${2*pad}px) * ${f})`;           // responsive: fills the card width
+  const trackY=24, height=trackY+150;
+  const nowF=fracOf(now);
+  const nodes=sorted.map(it=>{ const f=fracOf(parseD(it.date).getTime());
+    return `<div class="htl-node" style="left:${x(f)};top:${trackY}px"><i style="background:${it.color}"></i></div><div class="htl-lab diag" style="left:${x(f)};top:${trackY+13}px"><span class="d">${fmtShort(it.date)}</span><span class="t">${it.title}</span></div>`; }).join("");
+  return `<div class="htl-scroll" style="overflow:visible"><div class="htl" style="width:100%;height:${height}px">
+    <div class="htl-track" style="top:${trackY+5}px;left:${pad}px;right:${pad}px"><div class="htl-fill" style="width:${nowF*100}%"></div></div>
+    <div class="htl-now" style="left:${x(nowF)};top:${trackY}px"><div class="dot"></div><div class="now-lab">NOW</div></div>
     ${nodes}</div></div>`;
 }
 
@@ -483,7 +475,7 @@ function renderHome(){
         <button class="btn primary mini" onclick="openEvent()">+ Milestone</button>
       </div>
     </div>
-    ${hTimeline(tlItems)}
+    ${hTimeline(tlItems, S.move.moveDate)}
   </div>
 
   <div class="card pad" style="margin-top:16px;">
