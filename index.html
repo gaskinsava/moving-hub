@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moving Hub — Ava & Gab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --bg:#0d0e10; --panel:#16181b; --panel-2:#1c1f23; --panel-3:#23272c;
+  --text:#f2f3f5; --muted:#8b9098; --faint:#5c626b; --border:#262a2f; --border-2:#31363c;
+  --accent:#5b8def;
+  --ava:#e5706e;   /* red — Ava only */
+  --gab:#6fa8dc;   /* blue — Gab only */
+  --both:#a98ad6;  /* purple — Both only */
+  --good:#57c98a; --warn:#e0a95f;
+  --teal:#3fb6b6; --green:#5fbf8a; --amber:#e0a35f; --gold:#d3b24a; --pink:#e884b0;
+  --radius:16px; --shadow:0 1px 2px rgba(0,0,0,.4);
+  --caret:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='9'><path d='M1 2.5l3.5 3.5 3.5-3.5' stroke='%238b9098' fill='none' stroke-width='1.4'/></svg>");
+}
+[data-theme="light"] {
+  --bg:#f4f5f7; --panel:#ffffff; --panel-2:#f7f8fa; --panel-3:#eef0f3;
+  --text:#14171a; --muted:#6a7078; --faint:#a2a8b0; --border:#e6e8ec; --border-2:#dde0e5;
+  --accent:#3b6ea5; --ava:#d75a58; --gab:#3d84c4; --both:#8a63c4;
+  --good:#3ba86a; --warn:#c8862f; --teal:#2f9b9b; --green:#3ba86a; --amber:#c8862f; --gold:#b7982f; --pink:#d46a9a;
+  --shadow:0 1px 3px rgba(0,0,0,.06);
+}
+* { box-sizing:border-box; }
+html,body { margin:0; padding:0; }
+body { font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+a { color:var(--accent); }
+.display { font-family:'Anton',sans-serif; font-weight:400; letter-spacing:.5px; text-transform:uppercase; }
+.eyebrow { font-size:11px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:var(--muted); }
+
+/* Header */
+.header { position:sticky; top:0; z-index:50; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:14px 26px; gap:16px; }
+.logo { display:flex; align-items:center; gap:12px; }
+.logo .mark { width:42px; height:42px; border-radius:11px; background:linear-gradient(135deg,var(--ava),var(--gab)); display:flex; align-items:center; justify-content:center; font-size:20px; }
+.logo h1 { margin:0; font-weight:800; font-size:17px; letter-spacing:-.2px; text-transform:uppercase; line-height:1; }
+.logo .sub { font-size:10px; letter-spacing:1.6px; color:var(--muted); text-transform:uppercase; font-weight:600; margin-top:3px; }
+.hactions { display:flex; align-items:center; gap:10px; }
+.saved { font-size:12px; color:var(--good); font-weight:600; }
+.seg { display:inline-flex; background:var(--panel-2); border:1px solid var(--border); border-radius:11px; padding:3px; }
+.seg button { border:none; background:none; padding:7px 15px; border-radius:8px; cursor:pointer; color:var(--muted); font:inherit; font-size:12.5px; font-weight:600; transition:.12s; }
+.seg button.active { background:var(--panel); color:var(--text); box-shadow:var(--shadow); }
+.seg button.ava.active { color:var(--ava); } .seg button.gab.active { color:var(--gab); }
+.hbtn { padding:8px 14px; border-radius:10px; border:1px solid var(--border-2); background:var(--panel-2); color:var(--text); cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; }
+.hbtn:hover { background:var(--panel-3); }
+
+/* Tabs */
+.tabs { position:sticky; top:71px; z-index:40; background:var(--panel); border-bottom:1px solid var(--border); padding:0 26px; display:flex; gap:4px; overflow-x:auto; }
+.tab { border:none; background:none; color:var(--muted); font:inherit; font-weight:600; font-size:13px; letter-spacing:.6px; text-transform:uppercase; padding:14px 14px; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+.tab:hover { color:var(--text); }
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.wrap { max-width:1220px; margin:0 auto; padding:24px 26px 70px; }
+
+/* Cards */
+.card { background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); }
+.grid { display:grid; gap:16px; }
+.c2 { grid-template-columns:1fr 1fr; } .c3 { grid-template-columns:repeat(3,1fr); }
+@media (max-width:900px){ .c2,.c3{grid-template-columns:1fr;} }
+.pad { padding:20px; }
+.section-label { margin:26px 0 12px; }
+.stat .k { font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); font-weight:700; }
+.stat .v { font-family:'Anton'; font-size:30px; line-height:1.05; margin-top:6px; }
+
+.pill { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:600; background:var(--panel-2); border:1px solid var(--border); color:var(--muted); }
+.pill.ava{ color:var(--ava); background:color-mix(in srgb,var(--ava) 15%,transparent); border-color:transparent; }
+.pill.gab{ color:var(--gab); background:color-mix(in srgb,var(--gab) 15%,transparent); border-color:transparent; }
+.pill.both{ color:var(--both); background:color-mix(in srgb,var(--both) 16%,transparent); border-color:transparent; }
+.pill.good{ color:var(--good); background:color-mix(in srgb,var(--good) 15%,transparent); border-color:transparent; }
+.pill.warn{ color:var(--warn); background:color-mix(in srgb,var(--warn) 15%,transparent); border-color:transparent; }
+.pill.click{ cursor:pointer; }
+
+.btn { padding:8px 14px; border-radius:10px; border:1px solid var(--border-2); background:var(--panel-2); color:var(--text); cursor:pointer; font:inherit; font-size:12.5px; font-weight:600; }
+.btn.primary{ background:var(--accent); color:#fff; border-color:transparent; }
+.btn.ghost{ background:none; } .btn.mini{ padding:5px 11px; font-size:12px; }
+.btn:hover{ filter:brightness(1.08); }
+
+input,select,textarea{ font-family:inherit; font-size:13px; padding:8px 10px; border-radius:9px; border:1px solid var(--border-2); background:var(--panel-2); color:var(--text); width:100%; }
+input:focus,select:focus,textarea:focus{ outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent); border-color:var(--accent); }
+input.bare{ border:none; background:none; padding:6px 4px; }
+input.bare:focus{ outline:none; background:var(--panel-2); border-radius:6px; }
+label.f{ display:flex; flex-direction:column; gap:5px; font-size:11px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); }
+
+/* styled selects */
+.sel{ appearance:none; -webkit-appearance:none; background-color:var(--panel-2); border:1px solid var(--border-2); border-radius:8px; padding:6px 26px 6px 10px; font:inherit; font-size:12.5px; font-weight:500; color:var(--text); cursor:pointer; background-image:var(--caret); background-repeat:no-repeat; background-position:right 9px center; width:auto; }
+.pillsel{ appearance:none; -webkit-appearance:none; border:1px solid transparent; border-radius:999px; padding:4px 24px 4px 11px; font:inherit; font-size:11.5px; font-weight:600; cursor:pointer; background-image:var(--caret); background-repeat:no-repeat; background-position:right 8px center; width:auto; }
+.pillsel option,.sel option{ background:var(--panel); color:var(--text); }
+
+.progress{ height:8px; border-radius:999px; background:var(--panel-3); overflow:hidden; }
+.progress>span{ display:block; height:100%; border-radius:999px; }
+.stackbar{ height:16px; border-radius:999px; overflow:hidden; display:flex; background:var(--panel-3); }
+.stackbar>span{ height:100%; display:block; }
+.row-between{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.muted{ color:var(--muted); } .tag{ font-size:11px; color:var(--muted); }
+.del{ color:var(--warn); cursor:pointer; background:none; border:none; font-size:16px; padding:2px 7px; border-radius:6px; line-height:1; }
+.del:hover{ background:color-mix(in srgb,var(--warn) 14%,transparent); }
+.empty{ text-align:center; color:var(--muted); padding:26px; }
+.money{ font-variant-numeric:tabular-nums; }
+
+/* Timeline */
+.htl-scroll{ overflow-x:auto; padding:8px 2px; }
+.htl{ position:relative; }
+.htl-track{ position:absolute; height:3px; background:var(--border-2); border-radius:2px; }
+.htl-fill{ position:absolute; left:0; top:0; height:100%; background:var(--good); border-radius:2px; }
+.htl-node{ position:absolute; transform:translateX(-50%); z-index:3; }
+.htl-node i{ display:block; width:13px; height:13px; border-radius:50%; border:2.5px solid var(--panel); box-shadow:0 0 0 1px var(--border-2); }
+.htl-conn{ position:absolute; width:2px; background:var(--border-2); transform:translateX(-50%); z-index:1; }
+.htl-lab{ position:absolute; width:106px; transform:translateX(-50%); text-align:center; z-index:2; background:var(--panel); padding:1px 3px; border-radius:5px; }
+.htl-lab.diag{ transform-origin:left top; transform:rotate(38deg); white-space:nowrap; width:auto; text-align:left; background:none; padding:0; }
+.htl-lab.diag .d{ display:inline; margin-right:5px; }
+.htl-lab.diag .t{ display:inline; }
+.htl-lab .d{ font-size:10px; font-weight:700; letter-spacing:.5px; color:var(--muted); text-transform:uppercase; }
+.htl-lab .t{ font-size:11px; font-weight:600; line-height:1.2; margin-top:2px; }
+.htl-now{ position:absolute; transform:translateX(-50%); z-index:3; text-align:center; }
+.htl-now .dot{ width:15px; height:15px; border-radius:50%; background:var(--good); margin:0 auto; box-shadow:0 0 0 0 color-mix(in srgb,var(--good) 70%,transparent); animation:pulse 1.6s infinite; }
+.htl-now .now-lab{ position:absolute; bottom:16px; left:50%; transform:translateX(-50%); font-size:9px; font-weight:800; letter-spacing:1px; color:var(--good); }
+@keyframes pulse{ 0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--good) 65%,transparent);} 70%{box-shadow:0 0 0 11px transparent;} 100%{box-shadow:0 0 0 0 transparent;} }
+
+/* Calendar */
+.cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.cal-nav{ display:flex; gap:6px; }
+.cal-nav button{ padding:6px 12px; border-radius:8px; border:1px solid var(--border-2); background:var(--panel-2); color:var(--text); cursor:pointer; font:inherit; font-size:12px; font-weight:600; }
+.cal{ display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; }
+.cal .dow{ text-align:center; font-size:10px; font-weight:700; letter-spacing:.5px; color:var(--muted); padding:2px 0; }
+.cal .day{ min-height:34px; border-radius:8px; border:1px solid transparent; padding:5px; font-size:12px; background:var(--panel-2); position:relative; }
+.cal.big .day{ height:92px; min-width:0; display:flex; flex-direction:column; gap:3px; overflow:hidden; }
+.cal .day.empty{ background:none; } .cal .day.today{ border-color:var(--good); }
+.cal .day .num{ font-size:11px; font-weight:600; color:var(--muted); }
+.cal .day.today .num{ color:var(--good); }
+.chip{ font-size:10.5px; line-height:1.25; padding:3px 6px; border-radius:6px; background:var(--panel-3); border-left:3px solid var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; max-width:100%; flex-shrink:0; }
+.chip .ct{ font-size:9px; color:var(--muted); font-weight:600; }
+
+/* Action items */
+.ai{ display:flex; align-items:center; gap:12px; padding:13px 14px; border-radius:12px; background:var(--panel-2); margin-bottom:8px; }
+.ai .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.ai .body{ flex:1; min-width:0; }
+.ai .title{ font-weight:600; font-size:13.5px; }
+.ai .meta{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600; margin-top:1px; }
+
+/* Tables */
+.btable{ width:100%; border-collapse:collapse; }
+.btable th{ text-align:right; font-size:10.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--muted); padding:11px 14px; border-bottom:1px solid var(--border); }
+.btable th.l{ text-align:left; }
+.btable td{ padding:8px 14px; border-bottom:1px solid var(--border); text-align:right; font-size:13px; }
+.btable td.l{ text-align:left; }
+.btable tr.cat td{ background:var(--panel-2); font-weight:700; text-transform:uppercase; letter-spacing:.6px; font-size:11.5px; }
+.btable tr.tot td{ font-weight:700; background:color-mix(in srgb,var(--accent) 7%,transparent); }
+.btable tr.grand td{ font-weight:800; background:var(--panel-3); font-size:14px; }
+.catdot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:8px; vertical-align:middle; }
+.numin{ width:104px; text-align:right; }
+.bhead{ background:var(--panel-3); }
+
+/* Apartments */
+#map{ height:380px; border-radius:var(--radius); border:1px solid var(--border); z-index:1; }
+.apt{ padding:16px; display:flex; flex-direction:column; gap:11px; animation:none; }
+.apt.flipping{ animation:flip .45s; }
+@keyframes flip{ 0%{transform:rotateY(0);} 50%{transform:rotateY(90deg);} 100%{transform:rotateY(0);} }
+.apt .price{ font-family:'Anton'; color:var(--good); font-size:19px; letter-spacing:.3px; }
+.apt .addr{ color:var(--muted); font-size:12.5px; }
+.score{ display:flex; align-items:center; gap:8px; font-size:12px; }
+.score .nm{ width:32px; font-weight:700; }
+.checks{ display:flex; flex-wrap:wrap; gap:6px; }
+.chk{ font-size:11px; padding:3px 9px; border-radius:999px; border:1px solid var(--border-2); cursor:pointer; user-select:none; }
+.chk.on{ background:color-mix(in srgb,var(--good) 15%,transparent); border-color:transparent; color:var(--good); }
+.pc{ display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12.5px; }
+.pc ul{ margin:5px 0 0; padding-left:15px; }
+.aptbtns{ display:flex; gap:6px; flex-wrap:wrap; }
+.fee-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+
+.subseg{ display:inline-flex; background:var(--panel-2); border:1px solid var(--border); border-radius:11px; padding:3px; }
+.subseg button{ border:none; background:none; padding:7px 16px; border-radius:8px; cursor:pointer; color:var(--muted); font:inherit; font-weight:600; font-size:12.5px; }
+.subseg button.active{ background:var(--panel); color:var(--text); box-shadow:var(--shadow); }
+
+/* Packing */
+.room{ margin-bottom:18px; }
+.room h3{ margin:0 0 10px; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; display:flex; align-items:center; gap:8px; }
+.box{ display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-bottom:1px solid var(--border); }
+.box:last-child{ border-bottom:none; }
+.box .bx-main{ flex:1; }
+
+/* Modal */
+.modal-bg{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px; }
+.modal{ background:var(--panel); border:1px solid var(--border-2); border-radius:18px; width:100%; max-width:560px; max-height:88vh; overflow-y:auto; padding:24px; }
+.modal h3{ margin:0 0 18px; font-size:17px; }
+.fg{ display:grid; grid-template-columns:1fr 1fr; gap:13px; }
+.fg .full{ grid-column:1/-1; }
+.hidden{ display:none!important; }
+.leaflet-tooltip.friend{ background:var(--pink); border:none; color:#fff; font-weight:600; box-shadow:none; }
+.leaflet-tooltip.friend:before{ border-top-color:var(--pink); }
+/* Auth */
+#authScreen{ position:fixed; inset:0; z-index:200; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:24px; }
+.auth-card{ width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:30px 28px; box-shadow:0 20px 50px rgba(0,0,0,.35); }
+.auth-card .mark{ width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,var(--ava),var(--gab)); display:flex; align-items:center; justify-content:center; font-size:26px; margin-bottom:16px; }
+.auth-card h2{ margin:0 0 4px; font-size:20px; letter-spacing:-.3px; }
+.auth-card p.sub{ margin:0 0 20px; color:var(--muted); font-size:13px; }
+.auth-card label.f{ margin-bottom:12px; }
+.auth-msg{ font-size:12.5px; margin:4px 0 12px; min-height:16px; }
+.auth-msg.err{ color:var(--bad); } .auth-msg.ok{ color:var(--good); }
+.auth-toggle{ margin-top:14px; font-size:13px; color:var(--muted); text-align:center; }
+.auth-toggle a{ cursor:pointer; font-weight:600; }
+.presence{ display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); }
+.presence .pdot{ width:8px; height:8px; border-radius:50%; background:var(--good); }
+</style>
+</head>
+<body data-theme="dark">
+<div id="authScreen" style="display:none;">
+  <div class="auth-card">
+    <div class="mark">🧳</div>
+    <h2 id="authTitle">Welcome back</h2>
+    <p class="sub" id="authSub">Sign in to your Moving Hub.</p>
+    <label class="f">Email<input id="authEmail" type="email" autocomplete="email" placeholder="you@email.com"></label>
+    <label class="f">Password<input id="authPass" type="password" autocomplete="current-password" placeholder="••••••••"></label>
+    <div class="auth-msg" id="authMsg"></div>
+    <button class="btn primary" id="authSubmit" style="width:100%;padding:11px;">Sign in</button>
+    <div class="auth-toggle" id="authToggle"></div>
+  </div>
+</div>
+<header class="header">
+  <div class="logo"><div class="mark">🧳</div><div><h1>Moving Hub</h1><div class="sub">Ava &amp; Gab · Planning + Budget</div></div></div>
+  <div class="hactions">
+    <span class="presence" id="presence"></span>
+    <span class="saved" id="saveState">Saved ✓</span>
+    <div class="seg" id="viewSeg"><button class="active" data-view="group">Both</button><button class="ava" data-view="ava">Ava</button><button class="gab" data-view="gab">Gab</button></div>
+    <select class="sel" id="hubSel" style="display:none;" onchange="switchHub(this.value)"></select>
+    <button class="hbtn" id="shareBtn">＋ Share</button>
+    <button class="hbtn" id="themeBtn">◐ Theme</button>
+    <button class="hbtn" id="signoutBtn">Sign out</button>
+  </div>
+</header>
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="home">Home</button>
+  <button class="tab" data-tab="todo">To-Do</button>
+  <button class="tab" data-tab="apartments">Apartments</button>
+  <button class="tab" data-tab="quotes">Quotes</button>
+  <button class="tab" data-tab="listings">Selling</button>
+  <button class="tab" data-tab="packing">Packing</button>
+  <button class="tab" data-tab="budget">Budget</button>
+</nav>
+<div class="wrap" id="content"></div>
+<div id="modalRoot"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============ Data ============ */
+const PEOPLE={ ava:"Ava", gab:"Gab" };
+const LA=[34.0522,-118.2437];
+const BUDGET_CATS=[
+  { name:"Moving Expenses", color:"var(--teal)" },
+  { name:"Travel Expenses", color:"var(--gold)" },
+  { name:"Apartment Purchases", color:"var(--green)" },
+  { name:"New Apartment Expenses", color:"var(--amber)" },
+];
+const TODO_CATS=["Logistics","Selling","Apartment","Travel","Packing"];
+const ROOMS=["Kitchen","Bedroom","Living Room","Bathroom","Office","Closet","Misc"];
+const STATUSES=[
+  { id:"todo", label:"To do", color:"var(--muted)" },
+  { id:"progress", label:"In progress", color:"var(--amber)" },
+  { id:"done", label:"Done", color:"var(--good)" },
+];
+const stById=id=>STATUSES.find(s=>s.id===id)||STATUSES[0];
+const ownerColor=o=>o==="both"?"var(--both)":`var(--${o})`;
+const ownerLabel=o=>o==="both"?"Both":PEOPLE[o];
+
+const seed={
+  theme:"dark", view:"group",
+  move:{ origin:"Greenville, NC", destination:"Los Angeles", moveDate:"2026-08-10" },
+  criteria:[
+    {id:"c1",label:"In budget",ava:5,gab:5},{id:"c2",label:"Parking",ava:3,gab:5},
+    {id:"c3",label:"In-unit laundry",ava:5,gab:2},{id:"c4",label:"Pet friendly",ava:4,gab:4},
+    {id:"c5",label:"Natural light",ava:5,gab:3},{id:"c6",label:"Near transit",ava:2,gab:4},
+    {id:"c7",label:"Walkable area",ava:4,gab:3},{id:"c8",label:"Outdoor space",ava:3,gab:2},
+  ],
+  apartments:[
+    {id:"a1",name:"Sunset Blvd 2BR",neighborhood:"Silver Lake",price:2950,lat:34.0869,lng:-118.2702,
+     pros:["Huge windows","Rooftop","Walk to coffee"],cons:["Street parking only","Older building"],
+     met:{c1:true,c3:true,c4:true,c5:true,c7:true},
+     fees:[{id:"f1",label:"Trash",amount:25},{id:"f2",label:"Pet rent",amount:50}]},
+    {id:"a2",name:"Abbot Kinney Loft",neighborhood:"Venice",price:3400,lat:33.9905,lng:-118.4655,
+     pros:["Near beach","New reno","Bike friendly"],cons:["Over budget","No parking"],
+     met:{c3:true,c4:true,c5:true,c7:true,c8:true},
+     fees:[{id:"f1",label:"Trash",amount:30},{id:"f2",label:"Parking (nearby lot)",amount:180}]},
+    {id:"a3",name:"Highland Park 1BR+den",neighborhood:"Highland Park",price:2450,lat:34.1122,lng:-118.1926,
+     pros:["Great price","Assigned parking","Metro nearby"],cons:["Smaller","No laundry"],
+     met:{c1:true,c2:true,c4:true,c6:true,c7:true},
+     fees:[{id:"f1",label:"Trash",amount:20}]},
+  ],
+  friends:[
+    {id:"fr1",name:"Maya",lat:34.0430,lng:-118.3100},
+    {id:"fr2",name:"Chris",lat:34.0219,lng:-118.4010},
+  ],
+  budget:[
+    {id:"b1",cat:"Moving Expenses",label:"Full-service movers",est:4200,act:0,payer:"split",paid:false},
+    {id:"b2",cat:"Moving Expenses",label:"Ship Ava's car",est:1150,act:1150,payer:"ava",paid:true},
+    {id:"b3",cat:"Moving Expenses",label:"Ship Gab's car",est:1050,act:0,payer:"gab",paid:false},
+    {id:"b4",cat:"Moving Expenses",label:"Ava lease break fee",est:2400,act:0,payer:"ava",paid:false},
+    {id:"b5",cat:"Travel Expenses",label:"One-way flights ×2",est:640,act:610,payer:"split",paid:true},
+    {id:"b6",cat:"Travel Expenses",label:"2 nights en route (hotel)",est:380,act:0,payer:"split",paid:false},
+    {id:"b7",cat:"Travel Expenses",label:"Rental car + gas",est:220,act:0,payer:"split",paid:false},
+    {id:"b8",cat:"Apartment Purchases",label:"New couch",est:1200,act:0,payer:"split",paid:false},
+    {id:"b9",cat:"Apartment Purchases",label:"Bed frame + mattress",est:900,act:0,payer:"split",paid:false},
+    {id:"b10",cat:"New Apartment Expenses",label:"Security deposit",est:2950,act:0,payer:"split",paid:false},
+    {id:"b11",cat:"New Apartment Expenses",label:"First month rent",est:2950,act:0,payer:"split",paid:false},
+    {id:"b12",cat:"New Apartment Expenses",label:"Utilities setup",est:200,act:0,payer:"gab",paid:false},
+  ],
+  quotes:[
+    {id:"q1",type:"Movers",company:"Cross-Country Van Lines",price:4200,rating:4.4,note:"Full pack + load",link:"",chosen:true},
+    {id:"q2",type:"Movers",company:"BudgetPod (you pack)",price:2600,rating:4.0,note:"They drive, we load",link:"",chosen:false},
+    {id:"q3",type:"Movers",company:"PODS 16ft",price:3100,rating:4.2,note:"30-day storage incl",link:"",chosen:false},
+    {id:"q4",type:"Car shipping",company:"Montway Auto",price:1150,rating:4.5,note:"Open carrier, 7-9 days",link:"",chosen:true},
+    {id:"q5",type:"Car shipping",company:"SGT Auto",price:1050,rating:4.1,note:"Open carrier, 9-12 days",link:"",chosen:false},
+  ],
+  listings:[
+    {id:"l1",owner:"ava",title:"West Elm sofa",platform:"Facebook",price:450,link:"",sold:true},
+    {id:"l2",owner:"ava",title:"Vintage Levi's lot",platform:"Depop",price:120,link:"",sold:false},
+    {id:"l3",owner:"gab",title:"Gaming desk",platform:"Facebook",price:180,link:"",sold:true},
+    {id:"l4",owner:"gab",title:"Snowboard + boots",platform:"Facebook",price:220,link:"",sold:false},
+  ],
+  todos:[
+    {id:"t1",text:"Give 60-day notice on Ava's lease",owner:"ava",cat:"Logistics",status:"done",due:"2026-07-01"},
+    {id:"t2",text:"Book movers",owner:"both",cat:"Logistics",status:"progress",due:"2026-07-22"},
+    {id:"t3",text:"Sell big furniture before move",owner:"both",cat:"Selling",status:"progress",due:"2026-07-30"},
+    {id:"t4",text:"Confirm one-way flights",owner:"ava",cat:"Travel",status:"todo",due:"2026-07-25"},
+    {id:"t5",text:"Schedule car shipping pickup",owner:"gab",cat:"Logistics",status:"todo",due:"2026-08-02"},
+    {id:"t6",text:"Transfer utilities / internet",owner:"gab",cat:"Apartment",status:"todo",due:"2026-08-01"},
+    {id:"t7",text:"Pack kitchen",owner:"both",cat:"Packing",status:"todo",due:"2026-08-03"},
+  ],
+  events:[
+    {id:"e1",date:"2026-07-20",title:"Apartment tours",type:"apartments"},
+    {id:"e2",date:"2026-07-28",title:"Sign new lease",type:"apartments"},
+    {id:"e3",date:"2026-08-05",title:"Movers pack & load",type:"movers"},
+    {id:"e4",date:"2026-08-06",title:"Cars picked up",type:"car"},
+    {id:"e5",date:"2026-08-08",title:"Flights to LA",type:"flights"},
+    {id:"e6",date:"2026-08-10",title:"Move-in day",type:"apartments"},
+    {id:"e7",date:"2026-08-14",title:"Cars delivered",type:"car"},
+  ],
+  packing:[
+    {id:"p1",room:"Kitchen",label:"Box 1",items:"Pots, pans, utensils",owner:"both",packed:true},
+    {id:"p2",room:"Kitchen",label:"Box 2",items:"Plates, glasses (fragile)",owner:"both",packed:false},
+    {id:"p3",room:"Bedroom",label:"Box 3",items:"Bedding, pillows, throws",owner:"ava",packed:false},
+    {id:"p4",room:"Living Room",label:"Box 4",items:"Books, records, decor",owner:"gab",packed:false},
+  ],
+};
+
+/* ============ Backend (Supabase) ============ */
+const SUPABASE_URL = "https://faqbrdfkolzqdaysgyoq.supabase.co";
+const SUPABASE_KEY = "sb_publishable_qm1z1jOCfiy3T-r0cdBQrg_NwHamSep";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser=null, currentId=null, lastSaved="", applyingRemote=false, saveTimer=null;
+
+/* per-browser prefs (theme + Both/Ava/Gab view) — NOT synced between users */
+const UI=(()=>{ try{ return JSON.parse(localStorage.getItem("mh_ui"))||{}; }catch(e){ return {}; } })();
+if(!UI.theme) UI.theme="dark"; if(!UI.view) UI.view="group";
+function saveUI(){ try{ localStorage.setItem("mh_ui",JSON.stringify(UI)); }catch(e){} }
+
+/* shared hub row (public.projects: data jsonb holds the whole hub) */
+const db={
+  async claimInvites(){ try{ await sb.rpc("claim_project_invites"); }catch(e){} },
+  async listHubs(){ const {data}=await sb.from("projects").select("id,name,owner_id,updated_at").order("updated_at",{ascending:false}); return data||[]; },
+  async loadHub(id){ const {data}=await sb.from("projects").select("data").eq("id",id).maybeSingle(); return data?data.data:null; },
+  async saveHub(id,obj){ const {error}=await sb.from("projects").update({ name:obj.name||"Our Move", data:obj }).eq("id",id); return !error; },
+  async createHub(obj){ const {data,error}=await sb.from("projects").insert({ owner_id:currentUser?.id, name:obj.name||"Our Move", data:obj }).select("id").single(); return error?null:(data?.id||null); },
+  async invite(id,email){ const {error}=await sb.from("project_invites").insert({ project_id:id, email:String(email).trim().toLowerCase() }); return error?error.message:null; },
+  async listInvites(id){ const {data}=await sb.from("project_invites").select("id,email").eq("project_id",id); return data||[]; },
+  async memberCount(id){ const {count}=await sb.from("project_members").select("user_id",{count:"exact",head:true}).eq("project_id",id); return count||0; }
+};
+
+let S=null;
+function save(){ if(applyingRemote||!currentId) return; setSaveState("saving"); clearTimeout(saveTimer); saveTimer=setTimeout(doSave,600); }
+async function doSave(){ saveTimer=null; if(!currentId) return; S.name="Our Move"; const j=JSON.stringify(S); if(j===lastSaved){ setSaveState("saved"); return; } const ok=await db.saveHub(currentId,S); if(ok) lastSaved=j; setSaveState(ok?"saved":"error"); }
+function setSaveState(st){ const el=document.getElementById("saveState"); if(!el) return; el.textContent=st==="saving"?"Saving…":st==="error"?"Save failed":"Saved ✓"; el.style.color=st==="error"?"var(--bad)":"var(--good)"; }
+function uid(){ return Math.random().toString(36).slice(2,9); }
+const money=n=>"$"+Math.round(n).toLocaleString();
+const parseMoney=v=>+String(v).replace(/[^0-9.]/g,"")||0;
+const TODAY=new Date(); TODAY.setHours(0,0,0,0);
+const parseD=ds=>{ const d=new Date(ds+"T00:00"); d.setHours(0,0,0,0); return d; };
+const daysTo=ds=>Math.round((parseD(ds)-TODAY)/86400000);
+const fmtShort=ds=>parseD(ds).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+/* ============ Budget math ============ */
+const lineCur=li=>(li.act>0?li.act:li.est);
+function share(li,who,amt){ if(li.payer===who) return amt; if(li.payer==="split") return amt/2; return 0; }
+function personBudget(who){ let total=0,paid=0,est=0; S.budget.forEach(li=>{ const c=lineCur(li); total+=share(li,who,c); est+=share(li,who,li.est); if(li.paid)paid+=share(li,who,c); }); return {total,paid,owe:total-paid,est}; }
+function groupBudget(){ let est=0,act=0,cur=0,paid=0; S.budget.forEach(li=>{ est+=li.est; act+=li.act; cur+=lineCur(li); if(li.paid)paid+=lineCur(li); }); return {est,act,cur,paid,owe:cur-paid}; }
+function earnings(who){ let sold=0,pot=0; S.listings.forEach(l=>{ if(who!=="group"&&l.owner!==who)return; pot+=l.price; if(l.sold)sold+=l.price; }); return {sold,pot}; }
+
+/* ============ Selects ============ */
+function pillSel(value,opts,color,onchange){ return `<select class="pillsel" style="color:${color};background-color:color-mix(in srgb,${color} 16%,transparent)" onchange="${onchange}">${opts.map(o=>`<option value="${o.v}" ${o.v===value?'selected':''}>${o.label}</option>`).join("")}</select>`; }
+function sel(value,opts,onchange){ return `<select class="sel" onchange="${onchange}">${opts.map(o=>`<option value="${o}" ${o===value?'selected':''}>${o}</option>`).join("")}</select>`; }
+function stPill(status,click){ const s=stById(status); return `<span class="pill ${click?'click':''}" style="color:${s.color};background:color-mix(in srgb,${s.color} 16%,transparent);border-color:transparent" ${click?`onclick="${click}"`:''}>${s.label}</span>`; }
+
+/* ============ Render root ============ */
+let tab="home", mapObj=null;
+let todoCal={y:2026,m:6}, homeCal={y:2026,m:7};
+let flipped=new Set();
+const PAGES={ home:renderHome, todo:renderTodo, apartments:renderApartments, quotes:renderQuotes, listings:renderListings, packing:renderPacking, budget:renderBudget };
+function render(){
+  document.body.setAttribute("data-theme",UI.theme);
+  document.getElementById("themeBtn").textContent=UI.theme==="dark"?"☀ Light":"☾ Dark";
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===tab));
+  document.querySelectorAll("#viewSeg button").forEach(b=>b.classList.toggle("active",b.dataset.view===UI.view));
+  mapObj=null;
+  document.getElementById("content").innerHTML=PAGES[tab]();
+  if(tab==="apartments") initMap();
+  save();
+}
+const vname=()=>UI.view==="group"?"both of you":PEOPLE[UI.view];
+
+/* ============ Timeline (proportional, no-overlap labels) ============ */
+function hTimeline(items){
+  if(!items.length) return `<div class="empty">No dated items yet</div>`;
+  const sorted=[...items].sort((a,b)=>a.date.localeCompare(b.date));
+  const n=sorted.length;
+  const times=sorted.map(i=>parseD(i.date).getTime());
+  const now=TODAY.getTime();
+  let min=Math.min(...times,now), max=Math.max(...times,now);
+  if(max===min) max=min+86400000;
+  const pad=60, baseW=Math.max(720,n*150), span=baseW-2*pad;
+  const xOf=t=>pad+(t-min)/(max-min)*span;
+  const xs=sorted.map(it=>xOf(parseD(it.date).getTime()));
+  const gaps=xs.slice(1).map((x,i)=>x-xs[i]);
+  const minGap=gaps.length?Math.min(...gaps):999;
+  const diag=minGap<115;                     // rotate labels diagonally when dots are close together
+  const trackY=24, nowX=xOf(now);
+  let W,height,nodes;
+  if(diag){
+    W=baseW+160; height=trackY+150;
+    nodes=sorted.map((it,i)=>`<div class="htl-node" style="left:${xs[i]}px;top:${trackY}px"><i style="background:${it.color}"></i></div><div class="htl-lab diag" style="left:${xs[i]}px;top:${trackY+13}px"><span class="d">${fmtShort(it.date)}</span><span class="t">${it.title}</span></div>`).join("");
+  } else {
+    W=baseW; height=trackY+60;
+    nodes=sorted.map((it,i)=>`<div class="htl-node" style="left:${xs[i]}px;top:${trackY}px"><i style="background:${it.color}"></i></div><div class="htl-lab" style="left:${xs[i]}px;top:${trackY+16}px"><div class="d">${fmtShort(it.date)}</div><div class="t">${it.title}</div></div>`).join("");
+  }
+  return `<div class="htl-scroll"><div class="htl" style="width:${W}px;height:${height}px">
+    <div class="htl-track" style="top:${trackY+5}px;left:${pad}px;width:${span}px"><div class="htl-fill" style="width:${Math.max(0,Math.min(span,nowX-pad))}px"></div></div>
+    <div class="htl-now" style="left:${nowX}px;top:${trackY}px"><div class="dot"></div><div class="now-lab">NOW</div></div>
+    ${nodes}</div></div>`;
+}
+
+/* ============ Calendar ============ */
+function monthCal(y,m,itemsByDate,big){
+  const first=new Date(y,m,1), startDow=first.getDay(), days=new Date(y,m+1,0).getDate();
+  const dows=["S","M","T","W","T","F","S"];
+  const todayStr=`${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(TODAY.getDate()).padStart(2,"0")}`;
+  let cells="";
+  for(let i=0;i<startDow;i++) cells+=`<div class="day empty"></div>`;
+  for(let d=1;d<=days;d++){
+    const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const its=itemsByDate[ds]||[]; const isT=ds===todayStr;
+    if(big){ cells+=`<div class="day big ${isT?'today':''}"><span class="num">${d}</span>${its.map(x=>`<div class="chip" style="border-left-color:${x.color}" title="${x.text}">${x.text}${x.tag?`<div class="ct">${x.tag}</div>`:""}</div>`).join("")}</div>`; }
+    else { cells+=`<div class="day ${isT?'today':''}"><span class="num">${d}</span>${its.length?`<div class="dots" style="position:absolute;bottom:5px;left:5px;display:flex;gap:3px;flex-wrap:wrap">${its.map(x=>`<i title="${x.text}" style="width:6px;height:6px;border-radius:50%;background:${x.color}"></i>`).join("")}</div>`:""}</div>`; }
+  }
+  return `<div class="cal ${big?'big':''}">${dows.map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div>`;
+}
+const eventColor=t=>({apartments:"var(--teal)",movers:"var(--amber)",flights:"var(--green)",car:"var(--gold)"})[t]||"var(--muted)";
+
+/* ============ HOME ============ */
+function renderHome(){
+  const openTodos=S.todos.filter(t=>t.status!=="done"&&(UI.view==="group"||t.owner===UI.view||t.owner==="both"));
+  const tlItems=S.events.map(ev=>({date:ev.date,title:ev.title,color:eventColor(ev.type)}));
+  const evByDate={}; S.events.forEach(ev=>{ (evByDate[ev.date]=evByDate[ev.date]||[]).push({text:ev.title,color:eventColor(ev.type)}); });
+  const dMove=daysTo(S.move.moveDate);
+  const moveChip=dMove>=0?`${dMove} days to move-in`:`moved in ${Math.abs(dMove)}d ago`;
+  return `
+  <div class="card pad">
+    <div class="row-between" style="margin-bottom:2px;">
+      <div><div class="eyebrow">The road to move-in</div><div class="tag" style="margin-top:3px;">${S.move.origin} → ${S.move.destination} · ${S.events.length} milestones</div></div>
+      <span class="pill" style="color:var(--good);background:color-mix(in srgb,var(--good) 15%,transparent);border-color:transparent;font-weight:700;">🏁 ${moveChip}</span>
+    </div>
+    ${hTimeline(tlItems)}
+  </div>
+
+  <div class="card pad" style="margin-top:16px;">
+    <div class="row-between" style="margin-bottom:14px;"><div class="eyebrow">Action items still open <span class="pill" style="margin-left:6px">${openTodos.length}</span></div><button class="btn ghost mini" onclick="go('todo')">View all →</button></div>
+    ${openTodos.map(t=>`
+      <div class="ai"><span class="dot" style="background:${ownerColor(t.owner)}"></span>
+        <div class="body"><div class="title">${t.text}</div><div class="meta">${ownerLabel(t.owner)} · ${t.cat} · due ${fmtShort(t.due)}</div></div>
+        ${stPill(t.status)}</div>`).join("")||`<div class="empty">Nothing outstanding 🎉</div>`}
+  </div>
+
+  <div class="grid c2" style="margin-top:16px;">
+    <div class="card pad">${budgetGlance()}</div>
+    <div class="card pad">
+      <div class="eyebrow" style="margin-bottom:14px;">Selling progress</div>
+      <div class="grid ${UI.view==="group"?"c2":""}">${UI.view==="group"?earnMini("ava")+earnMini("gab"):earnMini(UI.view)}</div>
+      <div class="row-between" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:13px;"><span class="muted">${UI.view==="group"?"Total earned":PEOPLE[UI.view]+" earned"}</span><span class="display" style="font-size:24px;color:var(--good)">${money(earnings(UI.view).sold)}</span></div>
+      <button class="btn ghost mini" style="margin-top:12px;" onclick="go('listings')">Manage listings →</button>
+    </div>
+  </div>`;
+}
+function budgetGlance(){
+  const g=groupBudget();
+  const proj=UI.view==="group"?g.cur:personBudget(UI.view).total;
+  const paid=UI.view==="group"?g.paid:personBudget(UI.view).paid;
+  const av=personBudget("ava").total, gb=personBudget("gab").total, tot=av+gb||1;
+  return `<div class="row-between" style="margin-bottom:14px;"><div class="eyebrow">Budget at a glance</div><div class="tag">${UI.view==="group"?"Both":PEOPLE[UI.view]}</div></div>
+    <div style="display:flex;gap:22px;align-items:center;">${donut(proj,paid)}<div style="flex:1;">${budgetGlanceRows()}</div></div>
+    ${UI.view==="group"?`<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+      <div class="row-between" style="font-size:12px;margin-bottom:6px;"><span class="eyebrow" style="letter-spacing:.6px">Split of grand total · ${money(av+gb)}</span></div>
+      <div class="stackbar"><span style="width:${av/tot*100}%;background:var(--ava)"></span><span style="width:${gb/tot*100}%;background:var(--gab)"></span></div>
+      <div class="row-between" style="margin-top:7px;font-size:12.5px;"><span style="color:var(--ava);font-weight:600">Ava ${money(av)}</span><span style="color:var(--gab);font-weight:600">Gab ${money(gb)}</span></div>
+    </div>`:""}`;
+}
+function donut(proj,paid){ const pct=proj>0?Math.round(paid/proj*100):0;
+  return `<div style="width:120px;height:120px;border-radius:50%;flex-shrink:0;background:conic-gradient(var(--good) ${pct}%, var(--panel-3) ${pct}%);display:flex;align-items:center;justify-content:center;"><div style="width:88px;height:88px;border-radius:50%;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;"><div class="display" style="font-size:22px">${pct}%</div><div class="eyebrow" style="font-size:9px">paid</div></div></div>`; }
+function budgetGlanceRows(){
+  const by={}; S.budget.forEach(li=>{ const amt=UI.view==="group"?lineCur(li):share(li,UI.view,lineCur(li)); if(amt<=0)return; by[li.cat]=(by[li.cat]||0)+amt; });
+  const total=Object.values(by).reduce((a,b)=>a+b,0)||1;
+  return BUDGET_CATS.map(c=>{ const v=by[c.name]||0,p=Math.round(v/total*100);
+    return `<div style="margin-bottom:9px;"><div class="row-between" style="font-size:12px;margin-bottom:4px;"><span><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${c.color};margin-right:7px;vertical-align:middle"></i>${c.name}</span><span class="muted money">${money(v)}</span></div><div class="progress"><span style="width:${p}%;background:${c.color}"></span></div></div>`; }).join("");
+}
+function earnMini(who){ const e=earnings(who),p=e.pot>0?Math.round(e.sold/e.pot*100):0;
+  return `<div><div class="row-between" style="margin-bottom:6px;"><span class="pill ${who}">${PEOPLE[who]}</span><span class="display" style="font-size:20px;color:var(--good)">${money(e.sold)}</span></div><div class="progress"><span style="width:${p}%;background:var(--${who})"></span></div><div class="tag" style="margin-top:5px;">${money(e.pot-e.sold)} still listed</div></div>`; }
+function navHome(d){ let m=homeCal.m+d,y=homeCal.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} homeCal={y,m}; render(); }
+
+/* ============ APARTMENTS ============ */
+function aptScore(a,who){ let got=0,max=0; S.criteria.forEach(cr=>{max+=cr[who]; if(a.met&&a.met[cr.id])got+=cr[who];}); return max?Math.round(got/max*100):0; }
+function aptTotal(a){ return a.price+(a.fees||[]).reduce((s,f)=>s+f.amount,0); }
+function renderApartments(){
+  const sa=UI.view==="group"||UI.view==="ava", sg=UI.view==="group"||UI.view==="gab";
+  return `
+  <div class="row-between" style="margin-bottom:14px;">
+    <div class="muted">Scored against what matters to ${vname()}. Hover a pink dot for a friend's place.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn ghost" onclick="openFriend()">+ Friend pin</button><button class="btn ghost" onclick="openCriteria()">Edit criteria</button><button class="btn primary" onclick="openApt()">+ Add apartment</button></div>
+  </div>
+  <div id="map"></div>
+  <div class="grid c3" style="margin-top:16px;">
+    ${S.apartments.map(a=> flipped.has(a.id)?aptBack(a):aptFront(a,sa,sg)).join("")}
+  </div>`;
+}
+function aptFront(a,sa,sg){
+  return `<div class="card apt">
+    <div class="row-between"><div><strong>${a.name}</strong> <span class="price">— ${money(a.price)}</span><div class="addr">${a.neighborhood} · ${money(aptTotal(a))}/mo all-in</div></div><button class="del" onclick="delApt('${a.id}')">×</button></div>
+    ${sa?scoreRow("Ava","ava",aptScore(a,"ava")):""}${sg?scoreRow("Gab","gab",aptScore(a,"gab")):""}
+    <div class="checks">${S.criteria.map(cr=>`<span class="chk ${a.met&&a.met[cr.id]?'on':''}" onclick="toggleMet('${a.id}','${cr.id}')">${a.met&&a.met[cr.id]?'✓':'○'} ${cr.label}</span>`).join("")}</div>
+    <div class="pc"><div><span class="pill good">Pros</span><ul>${a.pros.map(p=>`<li>${p}</li>`).join("")||"<li class='muted'>—</li>"}</ul></div>
+    <div><span class="pill warn">Cons</span><ul>${a.cons.map(p=>`<li>${p}</li>`).join("")||"<li class='muted'>—</li>"}</ul></div></div>
+    <div class="aptbtns"><button class="btn mini" onclick="doFlip('${a.id}')">⇄ Cost breakdown</button><button class="btn ghost mini" onclick="openAptEdit('${a.id}')">Edit details</button></div>
+  </div>`;
+}
+function aptBack(a){
+  return `<div class="card apt flipping">
+    <div class="row-between"><div><strong>${a.name}</strong><div class="addr">Monthly cost breakdown</div></div><button class="btn ghost mini" onclick="doFlip('${a.id}')">⇄ Back</button></div>
+    <div class="fee-row"><div style="flex:1;font-weight:600">Base rent</div><div class="money" style="font-weight:600">${money(a.price)}</div></div>
+    ${(a.fees||[]).map(f=>`<div class="fee-row">
+      <input class="bare" style="flex:1" value="${f.label}" onchange="setFee('${a.id}','${f.id}','label',this.value)">
+      <input class="bare money" style="width:90px;text-align:right" value="${money(f.amount)}" onchange="setFee('${a.id}','${f.id}','amount',this.value)">
+      <button class="del" onclick="delFee('${a.id}','${f.id}')">×</button></div>`).join("")}
+    <button class="btn ghost mini" onclick="addFee('${a.id}')" style="align-self:flex-start">+ Add fee</button>
+    <div class="row-between" style="margin-top:6px;padding-top:10px;border-top:1px solid var(--border);"><span class="eyebrow">Total / month</span><span class="price" style="font-size:22px">${money(aptTotal(a))}</span></div>
+  </div>`;
+}
+function scoreRow(name,who,pct){ return `<div class="score"><span class="nm" style="color:var(--${who})">${name}</span><div class="progress" style="flex:1"><span style="width:${pct}%;background:var(--${who})"></span></div><span style="width:34px;text-align:right;font-weight:700">${pct}%</span></div>`; }
+function initMap(){
+  const el=document.getElementById("map"); if(!el||!window.L) return;
+  mapObj=L.map(el,{scrollWheelZoom:true}).setView(LA,11);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/"+(UI.theme==="dark"?"dark_all":"light_all")+"/{z}/{x}/{y}{r}.png",{attribution:"© OpenStreetMap © CARTO",subdomains:"abcd",maxZoom:19}).addTo(mapObj);
+  const pts=[];
+  S.apartments.forEach(a=>{ if(a.lat&&a.lng){ const avg=Math.round((aptScore(a,"ava")+aptScore(a,"gab"))/2); L.marker([a.lat,a.lng]).addTo(mapObj).bindPopup(`<b>${a.name}</b><br>${a.neighborhood} · ${money(aptTotal(a))}/mo<br>Match ${avg}%`); pts.push([a.lat,a.lng]); } });
+  (S.friends||[]).forEach(f=>{ if(f.lat&&f.lng){ L.circleMarker([f.lat,f.lng],{radius:7,color:"#fff",weight:2,fillColor:getComputedStyle(document.body).getPropertyValue('--pink')||'#e884b0',fillOpacity:1}).addTo(mapObj).bindTooltip(`${f.name}'s House`,{className:"friend",direction:"top"}).bindPopup(`${f.name}'s House<br><a href="#" onclick="delFriend('${f.id}');return false;">remove pin</a>`); pts.push([f.lat,f.lng]); } });
+  if(pts.length) mapObj.fitBounds(pts,{padding:[45,45],maxZoom:12});
+  mapObj.whenReady(()=>mapObj.invalidateSize());
+  setTimeout(()=>mapObj.invalidateSize(),150);
+  setTimeout(()=>mapObj.invalidateSize(),600);
+  window.addEventListener("resize",()=>mapObj&&mapObj.invalidateSize());
+}
+function toggleMet(a,c){ const ap=S.apartments.find(x=>x.id===a); ap.met=ap.met||{}; ap.met[c]=!ap.met[c]; render(); }
+function delApt(id){ if(confirm("Remove apartment?")){ S.apartments=S.apartments.filter(a=>a.id!==id); flipped.delete(id); render(); } }
+function doFlip(id){ flipped.has(id)?flipped.delete(id):flipped.add(id); render(); }
+function setFee(aid,fid,f,v){ const a=S.apartments.find(x=>x.id===aid); const fee=a.fees.find(x=>x.id===fid); fee[f]=f==="amount"?parseMoney(v):v; render(); }
+function addFee(aid){ const a=S.apartments.find(x=>x.id===aid); a.fees=a.fees||[]; a.fees.push({id:uid(),label:"New fee",amount:0}); render(); }
+function delFee(aid,fid){ const a=S.apartments.find(x=>x.id===aid); a.fees=a.fees.filter(x=>x.id!==fid); render(); }
+function delFriend(id){ S.friends=S.friends.filter(f=>f.id!==id); render(); }
+
+/* ============ BUDGET ============ */
+function renderBudget(){
+  const group=UI.view==="group";
+  return `
+  <div class="grid c2" style="margin-bottom:16px;">${personBudgetCard("ava")}${personBudgetCard("gab")}</div>
+  <div class="card pad" style="margin-bottom:16px;">${budgetGlance()}</div>
+  ${group?"":`<div class="pill" style="margin-bottom:14px;">Showing ${PEOPLE[UI.view]}'s share · switch to Both to edit line items</div>`}
+  <div class="card" style="overflow:hidden;">
+    <table class="btable">
+      <thead class="bhead"><tr><th class="l">Specifics</th><th>Initial estimate</th><th>Actuals</th><th>Who pays</th><th>Status</th><th></th></tr></thead>
+      <tbody>${BUDGET_CATS.map(c=>renderBudgetCat(c,group)).join("")}${grandRow(group)}</tbody>
+    </table>
+  </div>`;
+}
+function personBudgetCard(who){ const b=personBudget(who),p=b.total>0?Math.round(b.paid/b.total*100):0,active=UI.view==="group"||UI.view===who;
+  return `<div class="card pad" style="border-top:3px solid var(--${who});opacity:${active?1:.5}">
+    <div class="row-between"><div class="eyebrow" style="color:var(--${who})">${PEOPLE[who]}'s total</div><span class="tag">est ${money(b.est)}</span></div>
+    <div class="display" style="font-size:34px;margin:8px 0 12px;">${money(b.total)}</div>
+    <div class="progress" style="height:10px;"><span style="width:${p}%;background:var(--${who})"></span></div>
+    <div class="row-between" style="margin-top:8px;font-size:12.5px;"><span style="color:var(--good)">${money(b.paid)} paid</span><span style="color:var(--${who})">${money(b.owe)} still owed</span></div></div>`; }
+function renderBudgetCat(c,group){
+  const lines=S.budget.filter(li=>li.cat===c.name&&(group||share(li,UI.view,1)>0));
+  let estT=0,actT=0;
+  const rows=lines.map(li=>{
+    const est=group?li.est:share(li,UI.view,li.est), act=group?li.act:share(li,UI.view,li.act); estT+=est; actT+=act;
+    const pc=li.payer==="split"?"var(--both)":`var(--${li.payer})`;
+    const payerSel=pillSel(li.payer,[{v:"split",label:"Split"},{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab}],pc,`setPayer('${li.id}',this.value)`);
+    const statSel=pillSel(li.paid?"paid":"unpaid",[{v:"unpaid",label:"Unpaid"},{v:"paid",label:"Paid"}],li.paid?"var(--good)":"var(--warn)",`setPaid('${li.id}',this.value)`);
+    if(group){ return `<tr>
+      <td class="l"><input class="bare" value="${li.label}" onchange="setLine('${li.id}','label',this.value)"></td>
+      <td><input class="bare numin money" value="${money(li.est)}" onchange="setLineMoney('${li.id}','est',this.value)"></td>
+      <td><input class="bare numin money" value="${money(li.act)}" onchange="setLineMoney('${li.id}','act',this.value)"></td>
+      <td>${payerSel}</td><td>${statSel}</td><td><button class="del" onclick="delLine('${li.id}')">×</button></td></tr>`; }
+    return `<tr><td class="l">${li.label}${li.payer==='split'?' <span class="tag">(½)</span>':''}</td><td class="money">${money(est)}</td><td class="money">${money(act)}</td><td>${payerSel}</td><td>${statSel}</td><td></td></tr>`;
+  }).join("")||`<tr><td class="l muted" colspan="6">No items for this view</td></tr>`;
+  return `<tr class="cat"><td class="l"><span class="catdot" style="background:${c.color}"></span>${c.name}</td><td colspan="5"></td></tr>${rows}
+    ${group?`<tr><td class="l"><button class="btn ghost mini" onclick="addLine('${c.name}')">+ Add line</button></td><td colspan="5"></td></tr>`:""}
+    <tr class="tot"><td class="l">${c.name} total</td><td class="money">${money(estT)}</td><td class="money">${money(actT)}</td><td colspan="3"></td></tr>`;
+}
+function grandRow(group){ let est=0,act=0; S.budget.forEach(li=>{ est+=group?li.est:share(li,UI.view,li.est); act+=group?li.act:share(li,UI.view,li.act); }); const varr=act-est;
+  return `<tr class="grand"><td class="l">Grand total</td><td class="money">${money(est)}</td><td class="money">${money(act)}</td><td colspan="3"></td></tr>
+    <tr><td class="l muted">Actual vs estimate variance</td><td colspan="2" class="money" style="color:${varr>0?'var(--warn)':'var(--good)'}">${varr>0?'+':''}${money(varr)}</td><td colspan="3"></td></tr>`; }
+function setLine(id,f,v){ const li=S.budget.find(x=>x.id===id); li[f]=v; render(); }
+function setLineMoney(id,f,v){ const li=S.budget.find(x=>x.id===id); li[f]=parseMoney(v); render(); }
+function setPayer(id,v){ S.budget.find(x=>x.id===id).payer=v; render(); }
+function setPaid(id,v){ S.budget.find(x=>x.id===id).paid=(v==="paid"); render(); }
+function delLine(id){ S.budget=S.budget.filter(x=>x.id!==id); render(); }
+function addLine(cat){ S.budget.push({id:uid(),cat,label:"New line item",est:0,act:0,payer:"split",paid:false}); render(); }
+
+/* ============ QUOTES ============ */
+function renderQuotes(){
+  return ["Movers","Car shipping"].map(type=>{
+    const qs=S.quotes.filter(q=>q.type===type).sort((a,b)=>a.price-b.price); const min=Math.min(...qs.map(q=>q.price));
+    return `<div class="section-label eyebrow">${type} quotes</div>
+    <div class="card" style="overflow:hidden;margin-bottom:8px;"><table class="btable">
+      <thead class="bhead"><tr><th class="l">Company</th><th>Price</th><th>Rating</th><th class="l">Notes</th><th>Pick</th><th></th></tr></thead>
+      <tbody>${qs.map(q=>`<tr>
+        <td class="l"><strong>${q.company}</strong>${q.link?` <a href="${q.link}" target="_blank">↗</a>`:""}</td>
+        <td class="money">${money(q.price)} ${q.price===min?'<span class="pill good">lowest</span>':''}</td>
+        <td>${"★".repeat(Math.round(q.rating))}<span class="tag"> ${q.rating}</span></td>
+        <td class="l muted">${q.note||"—"}</td>
+        <td><span class="pill ${q.chosen?'good':''} click" onclick="chooseQuote('${q.id}')">${q.chosen?'✓ chosen':'choose'}</span></td>
+        <td><button class="del" onclick="delQuote('${q.id}')">×</button></td></tr>`).join("")||`<tr><td colspan="6" class="empty">No ${type.toLowerCase()} quotes yet</td></tr>`}
+      </tbody></table></div>
+      <button class="btn ghost mini" style="margin-bottom:6px;" onclick="openQuote('${type}')">+ Add ${type.toLowerCase()} quote</button>`;
+  }).join("");
+}
+function chooseQuote(id){ const q=S.quotes.find(x=>x.id===id); S.quotes.filter(x=>x.type===q.type).forEach(x=>x.chosen=false); q.chosen=true; render(); }
+function delQuote(id){ S.quotes=S.quotes.filter(x=>x.id!==id); render(); }
+
+/* ============ LISTINGS ============ */
+function renderListings(){
+  const rows=S.listings.filter(l=>UI.view==="group"||l.owner===UI.view); const e=earnings(UI.view);
+  return `
+  <div class="grid c3" style="margin-bottom:8px;">${statCard("Earned (sold)",money(e.sold),"var(--good)")}${statCard("Still listed",money(e.pot-e.sold))}${statCard("Total potential",money(e.pot))}</div>
+  ${UI.view==="group"?`<div class="grid c2" style="margin-bottom:8px;">${statCard("Ava earned",money(earnings("ava").sold),"var(--ava)")}${statCard("Gab earned",money(earnings("gab").sold),"var(--gab)")}</div>`:""}
+  <div class="row-between section-label"><div class="eyebrow">Listings — click any field to edit</div><button class="btn primary mini" onclick="openListing()">+ Add listing</button></div>
+  <div class="card" style="overflow:hidden;"><table class="btable">
+    <thead class="bhead"><tr><th class="l">Item</th><th class="l">Seller</th><th class="l">Platform</th><th>Price</th><th class="l">Link</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows.map(l=>`<tr>
+      <td class="l"><input class="bare" value="${l.title}" onchange="setListing('${l.id}','title',this.value)"></td>
+      <td class="l">${pillSel(l.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab}],`var(--${l.owner})`,`setListing('${l.id}','owner',this.value)`)}</td>
+      <td class="l">${sel(l.platform,["Facebook","Depop","Craigslist","OfferUp","Poshmark"],`setListing('${l.id}','platform',this.value)`)}</td>
+      <td><input class="bare numin money" style="width:80px" value="${money(l.price)}" onchange="setListingMoney('${l.id}',this.value)"></td>
+      <td class="l">${l.link?`<a href="${l.link}" target="_blank">open ↗</a> `:""}<input class="bare" style="width:130px" placeholder="paste link" value="${l.link||""}" onchange="setListing('${l.id}','link',this.value)"></td>
+      <td>${pillSel(l.sold?"sold":"listed",[{v:"listed",label:"Listed"},{v:"sold",label:"Sold"}],l.sold?"var(--good)":"var(--muted)",`setListingSold('${l.id}',this.value)`)}</td>
+      <td><button class="del" onclick="delListing('${l.id}')">×</button></td></tr>`).join("")||`<tr><td colspan="7" class="empty">No listings yet</td></tr>`}
+    </tbody></table></div>
+  <div class="tag" style="margin-top:10px;">Auto sold/unsold detection from live links comes in the hosted build — for now set status yourself.</div>`;
+}
+function statCard(k,v,color){ return `<div class="card pad"><div class="stat"><div class="k">${k}</div><div class="v" style="${color?`color:${color}`:''}">${v}</div></div></div>`; }
+function setListing(id,f,v){ S.listings.find(x=>x.id===id)[f]=v; render(); }
+function setListingMoney(id,v){ S.listings.find(x=>x.id===id).price=parseMoney(v); render(); }
+function setListingSold(id,v){ S.listings.find(x=>x.id===id).sold=(v==="sold"); render(); }
+function delListing(id){ S.listings=S.listings.filter(x=>x.id!==id); render(); }
+
+/* ============ TO-DO ============ */
+function renderTodo(){
+  const rows=S.todos.filter(t=>UI.view==="group"||t.owner===UI.view||t.owner==="both");
+  const tlItems=rows.filter(t=>t.due).map(t=>({date:t.due,title:t.text,color:ownerColor(t.owner)}));
+  const byDate={}; rows.forEach(t=>{ if(!t.due)return; (byDate[t.due]=byDate[t.due]||[]).push({text:t.text,tag:`${ownerLabel(t.owner)} · ${t.cat}`,color:ownerColor(t.owner)}); });
+  return `
+  <div class="card pad">
+    <div class="row-between" style="margin-bottom:2px;"><div class="eyebrow">Task timeline</div><div class="tag">${rows.filter(t=>t.status!=='done').length} open</div></div>
+    ${hTimeline(tlItems)}
+  </div>
+  <div class="card pad" style="margin-top:16px;">
+    <div class="cal-head"><div class="eyebrow">Calendar — ${MONTHS[todoCal.m]} ${todoCal.y}</div><div class="cal-nav"><button onclick="navTodo(-1)">‹ Prev</button><button onclick="todoToday()">Today</button><button onclick="navTodo(1)">Next ›</button></div></div>
+    ${monthCal(todoCal.y,todoCal.m,byDate,true)}
+  </div>
+  <div class="row-between section-label"><div class="eyebrow">Tasks</div><button class="btn primary mini" onclick="openTodo()">+ Add task</button></div>
+  <div class="card" style="overflow:hidden;"><table class="btable">
+    <thead class="bhead"><tr><th class="l">Task</th><th class="l">Status</th><th class="l">Category</th><th class="l">Owner</th><th class="l">Deadline</th><th></th></tr></thead>
+    <tbody>${rows.map(t=>`<tr>
+      <td class="l"><input class="bare" value="${t.text}" onchange="setTodo('${t.id}','text',this.value)"></td>
+      <td class="l">${pillSel(t.status,STATUSES.map(s=>({v:s.id,label:s.label})),stById(t.status).color,`setTodo('${t.id}','status',this.value)`)}</td>
+      <td class="l">${sel(t.cat,TODO_CATS,`setTodo('${t.id}','cat',this.value)`)}</td>
+      <td class="l">${pillSel(t.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab},{v:"both",label:"Both"}],ownerColor(t.owner),`setTodo('${t.id}','owner',this.value)`)}</td>
+      <td class="l"><input class="bare" type="date" value="${t.due||''}" onchange="setTodo('${t.id}','due',this.value)"></td>
+      <td><button class="del" onclick="delTodo('${t.id}')">×</button></td></tr>`).join("")||`<tr><td colspan="6" class="empty">No tasks yet</td></tr>`}
+    </tbody></table></div>`;
+}
+function navTodo(d){ let m=todoCal.m+d,y=todoCal.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} todoCal={y,m}; render(); }
+function todoToday(){ todoCal={y:TODAY.getFullYear(),m:TODAY.getMonth()}; render(); }
+function setTodo(id,f,v){ S.todos.find(x=>x.id===id)[f]=v; render(); }
+function delTodo(id){ S.todos=S.todos.filter(x=>x.id!==id); render(); }
+
+/* ============ PACKING ============ */
+function renderPacking(){
+  const boxes=S.packing.filter(b=>UI.view==="group"||b.owner===UI.view||b.owner==="both");
+  const packed=boxes.filter(b=>b.packed).length;
+  const usedRooms=ROOMS.filter(r=>boxes.some(b=>b.room===r));
+  const showRooms=usedRooms.length?usedRooms:[ROOMS[0]];
+  return `
+  <div class="grid c3" style="margin-bottom:16px;">
+    ${statCard("Total boxes",boxes.length)}${statCard("Packed",packed,"var(--good)")}${statCard("To pack",boxes.length-packed,"var(--warn)")}
+  </div>
+  <div class="row-between" style="margin-bottom:14px;"><div class="muted">What's in each box, by room. Click any field to edit.</div><button class="btn primary" onclick="openBox()">+ Add box</button></div>
+  ${showRooms.map(room=>{
+    const rb=boxes.filter(b=>b.room===room);
+    return `<div class="card pad room">
+      <h3><span class="catdot" style="background:var(--teal)"></span>${room} <span class="tag" style="font-weight:500;text-transform:none;letter-spacing:0">${rb.length} box${rb.length===1?'':'es'}</span></h3>
+      ${rb.map(b=>`<div class="box">
+        <div class="cbox ${b.packed?'on':''}" onclick="setBox('${b.id}','packed',${!b.packed})" style="width:19px;height:19px;border-radius:6px;border:1.5px solid var(--border-2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;${b.packed?'background:var(--good);border-color:var(--good)':''}">${b.packed?'✓':''}</div>
+        <div class="bx-main">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><input class="bare" style="width:110px;font-weight:600" value="${b.label}" onchange="setBox('${b.id}','label',this.value)">${pillSel(b.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab},{v:"both",label:"Both"}],ownerColor(b.owner),`setBox('${b.id}','owner',this.value)`)}${sel(b.room,ROOMS,`setBox('${b.id}','room',this.value)`)}</div>
+          <input class="bare" style="width:100%" placeholder="what's inside…" value="${b.items||''}" onchange="setBox('${b.id}','items',this.value)"></div>
+        <button class="del" onclick="delBox('${b.id}')">×</button></div>`).join("")||`<div class="empty">No boxes yet</div>`}
+      <button class="btn ghost mini" style="margin-top:10px;" onclick="openBox('${room}')">+ Add box to ${room}</button>
+    </div>`;
+  }).join("")}`;
+}
+function setBox(id,f,v){ S.packing.find(x=>x.id===id)[f]=v; render(); }
+function delBox(id){ S.packing=S.packing.filter(x=>x.id!==id); render(); }
+
+/* ============ Modals ============ */
+function modal(html){ document.getElementById("modalRoot").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`; }
+function closeModal(){ document.getElementById("modalRoot").innerHTML=""; }
+const opts=(arr,s)=>arr.map(o=>`<option ${o===s?'selected':''}>${o}</option>`).join("");
+const gv=id=>document.getElementById(id).value;
+
+function openApt(){ modal(`<h3>Add apartment</h3><div class="fg">
+  <label class="f full">Name<input id="ap_name" placeholder="Echo Park 2BR"></label>
+  <label class="f">Neighborhood<input id="ap_hood"></label>
+  <label class="f">Rent /mo<input id="ap_price" type="number"></label>
+  <label class="f">Latitude<input id="ap_lat" type="number" step="any" placeholder="34.078"></label>
+  <label class="f">Longitude<input id="ap_lng" type="number" step="any" placeholder="-118.26"></label>
+  <label class="f full">Pros (comma separated)<input id="ap_pros"></label>
+  <label class="f full">Cons (comma separated)<input id="ap_cons"></label></div>
+  <div class="tag" style="margin-top:8px;">Tip: right-click a spot in Google Maps to copy lat/long.</div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveApt()">Add</button></div>`); }
+function saveApt(){ const n=gv("ap_name").trim(); if(!n)return alert("Name required");
+  S.apartments.push({id:uid(),name:n,neighborhood:gv("ap_hood")||"—",price:+gv("ap_price")||0,lat:+gv("ap_lat")||LA[0],lng:+gv("ap_lng")||LA[1],pros:gv("ap_pros").split(",").map(s=>s.trim()).filter(Boolean),cons:gv("ap_cons").split(",").map(s=>s.trim()).filter(Boolean),met:{},fees:[]}); closeModal(); render(); }
+
+function openAptEdit(id){ const a=S.apartments.find(x=>x.id===id); modal(`<h3>Edit apartment</h3><div class="fg">
+  <label class="f full">Name<input id="ae_name" value="${a.name}"></label>
+  <label class="f">Neighborhood<input id="ae_hood" value="${a.neighborhood}"></label>
+  <label class="f">Rent /mo<input id="ae_price" type="number" value="${a.price}"></label>
+  <label class="f full">Pros (comma separated)<input id="ae_pros" value="${a.pros.join(', ')}"></label>
+  <label class="f full">Cons (comma separated)<input id="ae_cons" value="${a.cons.join(', ')}"></label></div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveAptEdit('${id}')">Save</button></div>`); }
+function saveAptEdit(id){ const a=S.apartments.find(x=>x.id===id); a.name=gv("ae_name").trim()||a.name; a.neighborhood=gv("ae_hood")||a.neighborhood; a.price=+gv("ae_price")||0; a.pros=gv("ae_pros").split(",").map(s=>s.trim()).filter(Boolean); a.cons=gv("ae_cons").split(",").map(s=>s.trim()).filter(Boolean); closeModal(); render(); }
+
+function openFriend(){ modal(`<h3>Add friend's place</h3><p class="muted" style="margin-top:-8px;font-size:12.5px;">Shows as a pink dot on the map — hover to see the name.</p><div class="fg">
+  <label class="f full">Friend's name<input id="fr_name" placeholder="Maya"></label>
+  <label class="f">Latitude<input id="fr_lat" type="number" step="any"></label>
+  <label class="f">Longitude<input id="fr_lng" type="number" step="any"></label></div>
+  <div class="tag" style="margin-top:8px;">Right-click their spot in Google Maps to copy lat/long.</div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveFriend()">Add pin</button></div>`); }
+function saveFriend(){ const n=gv("fr_name").trim(); if(!n)return alert("Name required"); S.friends=S.friends||[]; S.friends.push({id:uid(),name:n,lat:+gv("fr_lat")||LA[0],lng:+gv("fr_lng")||LA[1]}); closeModal(); render(); }
+
+function openCriteria(){ modal(`<h3>Criteria &amp; weights</h3><p class="muted" style="margin-top:-8px;font-size:12.5px;">Add, delete, or re-weight (0–5) what each of you cares about. These are the buttons on every card.</p>
+  <table class="btable"><thead><tr><th class="l">Criterion</th><th style="color:var(--ava)">Ava</th><th style="color:var(--gab)">Gab</th><th></th></tr></thead><tbody>
+  ${S.criteria.map(c=>`<tr><td class="l"><input class="bare" value="${c.label}" onchange="editCrit('${c.id}','label',this.value)"></td>
+    <td><input class="bare numin" style="width:56px" type="number" min="0" max="5" value="${c.ava}" onchange="editCrit('${c.id}','ava',+this.value)"></td>
+    <td><input class="bare numin" style="width:56px" type="number" min="0" max="5" value="${c.gab}" onchange="editCrit('${c.id}','gab',+this.value)"></td>
+    <td><button class="del" onclick="delCrit('${c.id}')">×</button></td></tr>`).join("")}</tbody></table>
+  <button class="btn ghost mini" style="margin-top:10px;" onclick="addCrit()">+ Add criterion</button>
+  <div class="row-between" style="margin-top:16px;"><span></span><button class="btn primary" onclick="closeModal();render()">Done</button></div>`); }
+function editCrit(id,f,v){ const c=S.criteria.find(x=>x.id===id); c[f]=v; save(); }
+function delCrit(id){ S.criteria=S.criteria.filter(x=>x.id!==id); openCriteria(); }
+function addCrit(){ S.criteria.push({id:uid(),label:"New criterion",ava:3,gab:3}); openCriteria(); }
+
+function openQuote(type){ modal(`<h3>Add ${type.toLowerCase()} quote</h3><div class="fg">
+  <label class="f full">Company<input id="qt_co"></label><label class="f">Price<input id="qt_price" type="number"></label>
+  <label class="f">Rating<input id="qt_rating" type="number" step="0.1" min="0" max="5"></label>
+  <label class="f full">Notes<input id="qt_note"></label><label class="f full">Link<input id="qt_link" placeholder="https://"></label></div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveQuote('${type}')">Add</button></div>`); }
+function saveQuote(type){ const c=gv("qt_co").trim(); if(!c)return alert("Company required"); S.quotes.push({id:uid(),type,company:c,price:+gv("qt_price")||0,rating:+gv("qt_rating")||0,note:gv("qt_note"),link:gv("qt_link"),chosen:false}); closeModal(); render(); }
+
+function openListing(){ modal(`<h3>Add listing</h3><div class="fg">
+  <label class="f full">Item<input id="ls_title"></label>
+  <label class="f">Seller<select id="ls_owner"><option value="ava">Ava</option><option value="gab">Gab</option></select></label>
+  <label class="f">Platform<select id="ls_plat">${opts(["Facebook","Depop","Craigslist","OfferUp","Poshmark"])}</select></label>
+  <label class="f">Price<input id="ls_price" type="number"></label>
+  <label class="f full">Link<input id="ls_link" placeholder="https://"></label></div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveListing()">Add</button></div>`); }
+function saveListing(){ const t=gv("ls_title").trim(); if(!t)return alert("Item required"); S.listings.push({id:uid(),title:t,owner:gv("ls_owner"),platform:gv("ls_plat"),price:+gv("ls_price")||0,link:gv("ls_link"),sold:false}); closeModal(); render(); }
+
+function openTodo(){ modal(`<h3>Add task</h3><div class="fg">
+  <label class="f full">Task<input id="td_text"></label>
+  <label class="f">Status<select id="td_status">${STATUSES.map(s=>`<option value="${s.id}">${s.label}</option>`).join("")}</select></label>
+  <label class="f">Category<select id="td_cat">${opts(TODO_CATS)}</select></label>
+  <label class="f">Owner<select id="td_owner"><option value="both">Both</option><option value="ava">Ava</option><option value="gab">Gab</option></select></label>
+  <label class="f">Deadline<input id="td_due" type="date" value="2026-08-01"></label></div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveTodo()">Add</button></div>`); }
+function saveTodo(){ const t=gv("td_text").trim(); if(!t)return alert("Task required"); S.todos.push({id:uid(),text:t,status:gv("td_status"),cat:gv("td_cat"),owner:gv("td_owner"),due:gv("td_due")}); closeModal(); render(); }
+
+function openBox(room){ modal(`<h3>Add box</h3><div class="fg">
+  <label class="f">Box label<input id="bx_label" placeholder="Box 5"></label>
+  <label class="f">Room<select id="bx_room">${opts(ROOMS,room||ROOMS[0])}</select></label>
+  <label class="f">Owner<select id="bx_owner"><option value="both">Both</option><option value="ava">Ava</option><option value="gab">Gab</option></select></label>
+  <label class="f full">What's inside<input id="bx_items" placeholder="e.g. books, records"></label></div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveBox()">Add</button></div>`); }
+function saveBox(){ const l=gv("bx_label").trim()||("Box "+(S.packing.length+1)); S.packing.push({id:uid(),room:gv("bx_room"),label:l,items:gv("bx_items"),owner:gv("bx_owner"),packed:false}); closeModal(); render(); }
+
+/* ============ Wiring ============ */
+function go(t){ tab=t; render(); }
+document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>go(b.dataset.tab));
+document.querySelectorAll("#viewSeg button").forEach(b=>b.onclick=()=>{ UI.view=b.dataset.view; saveUI(); render(); });
+document.getElementById("themeBtn").onclick=()=>{ UI.theme=UI.theme==="dark"?"light":"dark"; saveUI(); render(); };
+document.getElementById("shareBtn").onclick=openShare;
+document.getElementById("signoutBtn").onclick=async()=>{ if(rtChannel){ try{ sb.removeChannel(rtChannel); }catch(e){} } await sb.auth.signOut(); location.reload(); };
+
+/* ---- Auth gate ---- */
+let authMode="signin";
+function showAuth(){ document.body.setAttribute("data-theme",UI.theme); document.getElementById("authScreen").style.display="flex"; setAuthMode("signin"); }
+function setAuthMode(m){ authMode=m;
+  document.getElementById("authTitle").textContent=m==="signin"?"Welcome back":"Create your account";
+  document.getElementById("authSub").textContent=m==="signin"?"Sign in to your Moving Hub.":"Sign up to start planning your move.";
+  document.getElementById("authSubmit").textContent=m==="signin"?"Sign in":"Create account";
+  document.getElementById("authPass").setAttribute("autocomplete",m==="signin"?"current-password":"new-password");
+  document.getElementById("authToggle").innerHTML=m==="signin"?`New here? <a onclick="setAuthMode('signup')">Create an account</a>`:`Already have an account? <a onclick="setAuthMode('signin')">Sign in</a>`;
+  authMsg("");
+}
+function authMsg(t,cls){ const el=document.getElementById("authMsg"); el.textContent=t||""; el.className="auth-msg"+(cls?" "+cls:""); }
+async function doAuth(){
+  const email=document.getElementById("authEmail").value.trim(), pass=document.getElementById("authPass").value;
+  if(!email||!pass){ authMsg("Enter your email and password.","err"); return; }
+  document.getElementById("authSubmit").disabled=true; authMsg("Working…");
+  try{
+    if(authMode==="signup"){
+      const {data,error}=await sb.auth.signUp({email,password:pass});
+      if(error) authMsg(error.message,"err");
+      else if(data.session) startApp(data.session.user);
+      else { authMsg("Account created — check your email to confirm, then sign in.","ok"); setAuthMode("signin"); }
+    } else {
+      const {data,error}=await sb.auth.signInWithPassword({email,password:pass});
+      if(error) authMsg(error.message,"err"); else startApp(data.session.user);
+    }
+  }catch(e){ authMsg(String(e&&e.message||e),"err"); }
+  document.getElementById("authSubmit").disabled=false;
+}
+document.getElementById("authSubmit").onclick=doAuth;
+document.getElementById("authPass").addEventListener("keydown",e=>{ if(e.key==="Enter") doAuth(); });
+
+/* ---- Boot / hub load ---- */
+function seedHub(){ const s=structuredClone(seed); s.name="Our Move"; return s; }
+function setCrewNames(){ PEOPLE.ava=(S&&S.crew&&S.crew.ava)||"Ava"; PEOPLE.gab=(S&&S.crew&&S.crew.gab)||"Gab"; }
+async function boot(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session) startApp(session.user); else showAuth();
+}
+async function startApp(user){
+  currentUser=user;
+  document.getElementById("authScreen").style.display="none";
+  setSaveState("saving");
+  await db.claimInvites();
+  let hubs=await db.listHubs();
+  if(!hubs.length){ currentId=await db.createHub(seedHub()); hubs=await db.listHubs(); }
+  else currentId=hubs[0].id;
+  let data=await db.loadHub(currentId);
+  S=data||seedHub(); lastSaved=JSON.stringify(S); setCrewNames();
+  renderHubSel(hubs);
+  setSaveState("saved");
+  subscribeRealtime(currentId);
+  render();
+}
+function renderHubSel(hubs){
+  const el=document.getElementById("hubSel"); if(!el) return;
+  if(hubs.length>1){
+    el.style.display="";
+    el.innerHTML=hubs.map(h=>`<option value="${h.id}" ${h.id===currentId?'selected':''}>Our Move ${h.owner_id===currentUser.id?'(yours)':'(shared)'}</option>`).join("");
+  } else el.style.display="none";
+}
+async function switchHub(id){
+  if(rtChannel){ try{ sb.removeChannel(rtChannel); }catch(e){} }
+  currentId=id; const d=await db.loadHub(id); S=d||seedHub(); lastSaved=JSON.stringify(S); setCrewNames();
+  subscribeRealtime(id); render();
+}
+
+/* ---- Realtime live-sync + presence ---- */
+let rtChannel=null, pendingRemote=null;
+function editingInViews(){ const el=document.activeElement,v=document.getElementById("content"); return !!(el&&v&&v.contains(el)&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)); }
+function applyRemoteNow(){
+  if(!pendingRemote) return;
+  if(editingInViews()||saveTimer) return;
+  const nd=pendingRemote; pendingRemote=null;
+  if(JSON.stringify(nd)===JSON.stringify(S)) return;
+  applyingRemote=true; S=nd; lastSaved=JSON.stringify(S); setCrewNames(); render(); applyingRemote=false;
+  setSaveState("saved");
+}
+function subscribeRealtime(id){
+  if(rtChannel){ try{ sb.removeChannel(rtChannel); }catch(e){} rtChannel=null; }
+  rtChannel=sb.channel("hub:"+id,{ config:{ presence:{ key: currentUser.id } } });
+  rtChannel
+    .on("postgres_changes",{ event:"UPDATE", schema:"public", table:"projects", filter:"id=eq."+id },
+       p=>{ const nd=p&&p.new&&p.new.data; if(nd&&JSON.stringify(nd)!==JSON.stringify(S)){ pendingRemote=nd; applyRemoteNow(); } })
+    .on("presence",{ event:"sync" }, renderPresence)
+    .subscribe(s=>{ if(s==="SUBSCRIBED") rtChannel.track({ email: currentUser.email }); });
+}
+function renderPresence(){
+  const el=document.getElementById("presence"); if(!el||!rtChannel) return;
+  let others=0; const st=rtChannel.presenceState()||{};
+  Object.keys(st).forEach(k=>{ if(k!==currentUser.id) others++; });
+  el.innerHTML = others>0 ? `<span class="pdot"></span>${others} online` : "";
+}
+document.addEventListener("focusout",e=>{ const v=document.getElementById("content"); if(v&&v.contains(e.target)) setTimeout(applyRemoteNow,150); });
+
+/* ---- Share / invite ---- */
+async function openShare(){
+  if(!currentId) return;
+  modal(`<h3>Share this hub</h3>
+    <p class="muted" style="margin-top:-8px;font-size:12.5px;">Invite Gab (or anyone) by email. When they sign in with that email, they'll see this same hub — live.</p>
+    <label class="f full">Email to invite<input id="sh_email" type="email" placeholder="gab@email.com"></label>
+    <div id="sh_msg" class="tag" style="margin-top:8px;min-height:15px;"></div>
+    <div id="sh_list" style="margin-top:8px;"></div>
+    <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Close</button><button class="btn primary" onclick="sendInvite()">Send invite</button></div>`);
+  refreshShare();
+}
+async function refreshShare(){
+  const list=document.getElementById("sh_list"); if(!list) return;
+  const [invites,count]=await Promise.all([db.listInvites(currentId), db.memberCount(currentId)]);
+  list.innerHTML=`<div class="eyebrow" style="margin-bottom:8px;">${count} ${count===1?'person has':'people have'} access</div>`+
+    (invites.length?`<div class="eyebrow" style="margin:10px 0 6px;">Pending invites</div>`+invites.map(i=>`<div class="row-between" style="font-size:13px;padding:4px 0;"><span>${i.email}</span><button class="del" onclick="cancelInvite('${i.id}')">×</button></div>`).join(""):"");
+}
+async function sendInvite(){
+  const email=(document.getElementById("sh_email").value||"").trim(), msg=document.getElementById("sh_msg");
+  if(!email){ msg.textContent="Enter an email."; return; }
+  msg.textContent="Sending…";
+  const err=await db.invite(currentId,email);
+  if(err) msg.textContent=/duplicate|unique/i.test(err)?"That email is already invited.":err;
+  else { msg.textContent="Invite sent ✓"; document.getElementById("sh_email").value=""; refreshShare(); }
+}
+async function cancelInvite(id){ await sb.from("project_invites").delete().eq("id",id); refreshShare(); }
+
+boot();
+</script>
+</body>
+</html>
