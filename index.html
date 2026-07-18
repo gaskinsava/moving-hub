@@ -377,6 +377,7 @@ function setSaveState(st){ const el=document.getElementById("saveState"); if(!el
 function uid(){ return Math.random().toString(36).slice(2,9); }
 const money=n=>"$"+Math.round(n).toLocaleString();
 const parseMoney=v=>+String(v).replace(/[^0-9.]/g,"")||0;
+const y2026=v=>(v&&/^\d{4}-\d{2}-\d{2}$/.test(v))?("2026"+v.slice(4)):v;   // force every date entry into 2026
 const TODAY=new Date(); TODAY.setHours(0,0,0,0);
 const parseD=ds=>{ const d=new Date(ds+"T00:00"); d.setHours(0,0,0,0); return d; };
 const daysTo=ds=>Math.round((parseD(ds)-TODAY)/86400000);
@@ -473,7 +474,7 @@ function renderHome(){
         <div class="tag" style="margin-top:4px;display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
           From <input class="bare" style="width:100px" value="${S.move.origin||''}" placeholder="origin" onchange="setMove('origin',this.value)">
           → <input class="bare" style="width:100px" value="${S.move.destination||''}" placeholder="destination" onchange="setMove('destination',this.value)">
-          · move-in <input class="bare" type="date" style="width:140px" value="${S.move.moveDate||''}" onchange="setMove('moveDate',this.value)">
+          · move-in <input class="bare" type="date" style="width:140px" value="${S.move.moveDate||''}" onchange="setMove('moveDate',y2026(this.value))">
           · ${S.events.length} milestone${S.events.length===1?'':'s'}
         </div>
       </div>
@@ -543,7 +544,7 @@ function renderApartments(){
 }
 function aptFront(a,sa,sg){
   return `<div class="card apt">
-    <div class="row-between"><div><strong>${a.name}</strong> <span class="price">— ${money(a.price)}</span><div class="addr">${a.neighborhood} · ${money(aptTotal(a))}/mo all-in</div></div><button class="del" onclick="delApt('${a.id}')">×</button></div>
+    <div class="row-between"><div><strong>${a.link?`<a href="${a.link}" target="_blank" rel="noopener">${a.name} ↗</a>`:a.name}</strong> <span class="price">— ${money(a.price)}</span><div class="addr">${a.neighborhood} · ${money(aptTotal(a))}/mo all-in</div></div><button class="del" onclick="delApt('${a.id}')">×</button></div>
     ${sa?scoreRow("Ava","ava",aptScore(a,"ava")):""}${sg?scoreRow("Gab","gab",aptScore(a,"gab")):""}
     <div class="checks">${S.criteria.map(cr=>`<span class="chk ${a.met&&a.met[cr.id]?'on':''}" onclick="toggleMet('${a.id}','${cr.id}')">${a.met&&a.met[cr.id]?'✓':'○'} ${cr.label}</span>`).join("")}</div>
     <div class="pc"><div><span class="pill good">Pros</span><ul>${a.pros.map(p=>`<li>${p}</li>`).join("")||"<li class='muted'>—</li>"}</ul></div>
@@ -703,7 +704,7 @@ function renderTodo(){
       <td class="l">${pillSel(t.status,STATUSES.map(s=>({v:s.id,label:s.label})),stById(t.status).color,`setTodo('${t.id}','status',this.value)`)}</td>
       <td class="l">${sel(t.cat,TODO_CATS,`setTodo('${t.id}','cat',this.value)`)}</td>
       <td class="l">${pillSel(t.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab},{v:"both",label:"Both"}],ownerColor(t.owner),`setTodo('${t.id}','owner',this.value)`)}</td>
-      <td class="l"><input class="bare" type="date" value="${t.due||''}" onchange="setTodo('${t.id}','due',this.value)"></td>
+      <td class="l"><input class="bare" type="date" value="${t.due||''}" onchange="setTodo('${t.id}','due',y2026(this.value))"></td>
       <td><button class="del" onclick="delTodo('${t.id}')">×</button></td></tr>`).join("")||`<tr><td colspan="6" class="empty">No tasks yet</td></tr>`}
     </tbody></table></div>`;
 }
@@ -713,32 +714,35 @@ function setTodo(id,f,v){ S.todos.find(x=>x.id===id)[f]=v; render(); }
 function delTodo(id){ S.todos=S.todos.filter(x=>x.id!==id); render(); }
 
 /* ============ PACKING ============ */
+function getRooms(){ if(!S.rooms||!S.rooms.length) S.rooms=[...ROOMS]; return S.rooms; }
 function renderPacking(){
+  const rooms=getRooms();
   const boxes=S.packing.filter(b=>UI.view==="group"||b.owner===UI.view||b.owner==="both");
   const packed=boxes.filter(b=>b.packed).length;
-  const usedRooms=ROOMS.filter(r=>boxes.some(b=>b.room===r));
-  const showRooms=usedRooms.length?usedRooms:[ROOMS[0]];
+  const esc=r=>r.replace(/'/g,"\\'");
   return `
   <div class="grid c3" style="margin-bottom:16px;">
     ${statCard("Total boxes",boxes.length)}${statCard("Packed",packed,"var(--good)")}${statCard("To pack",boxes.length-packed,"var(--warn)")}
   </div>
-  <div class="row-between" style="margin-bottom:14px;"><div class="muted">What's in each box, by room. Click any field to edit.</div><button class="btn primary" onclick="openBox()">+ Add box</button></div>
-  ${showRooms.map(room=>{
+  <div class="row-between" style="margin-bottom:14px;"><div class="muted">What's in each box, by room. Click any field to edit.</div><div style="display:flex;gap:8px;"><button class="btn ghost" onclick="addRoom()">+ Add room</button><button class="btn primary" onclick="openBox()">+ Add box</button></div></div>
+  ${rooms.map(room=>{
     const rb=boxes.filter(b=>b.room===room);
     return `<div class="card pad room">
-      <h3><span class="catdot" style="background:var(--teal)"></span>${room} <span class="tag" style="font-weight:500;text-transform:none;letter-spacing:0">${rb.length} box${rb.length===1?'':'es'}</span></h3>
+      <h3><span class="catdot" style="background:var(--teal)"></span>${room} <span class="tag" style="font-weight:500;text-transform:none;letter-spacing:0">${rb.length} box${rb.length===1?'':'es'}</span><button class="del" style="margin-left:auto" title="Remove room" onclick="delRoom('${esc(room)}')">×</button></h3>
       ${rb.map(b=>`<div class="box">
         <div class="cbox ${b.packed?'on':''}" onclick="setBox('${b.id}','packed',${!b.packed})" style="width:19px;height:19px;border-radius:6px;border:1.5px solid var(--border-2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;${b.packed?'background:var(--good);border-color:var(--good)':''}">${b.packed?'✓':''}</div>
         <div class="bx-main">
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><input class="bare" style="width:110px;font-weight:600" value="${b.label}" onchange="setBox('${b.id}','label',this.value)">${pillSel(b.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab},{v:"both",label:"Both"}],ownerColor(b.owner),`setBox('${b.id}','owner',this.value)`)}${sel(b.room,ROOMS,`setBox('${b.id}','room',this.value)`)}</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;"><input class="bare" style="width:110px;font-weight:600" value="${b.label}" onchange="setBox('${b.id}','label',this.value)">${pillSel(b.owner,[{v:"ava",label:PEOPLE.ava},{v:"gab",label:PEOPLE.gab},{v:"both",label:"Both"}],ownerColor(b.owner),`setBox('${b.id}','owner',this.value)`)}${sel(b.room,rooms,`setBox('${b.id}','room',this.value)`)}</div>
           <input class="bare" style="width:100%" placeholder="what's inside…" value="${b.items||''}" onchange="setBox('${b.id}','items',this.value)"></div>
         <button class="del" onclick="delBox('${b.id}')">×</button></div>`).join("")||`<div class="empty">No boxes yet</div>`}
-      <button class="btn ghost mini" style="margin-top:10px;" onclick="openBox('${room}')">+ Add box to ${room}</button>
+      <button class="btn ghost mini" style="margin-top:10px;" onclick="openBox('${esc(room)}')">+ Add box to ${room}</button>
     </div>`;
   }).join("")}`;
 }
 function setBox(id,f,v){ S.packing.find(x=>x.id===id)[f]=v; render(); }
 function delBox(id){ S.packing=S.packing.filter(x=>x.id!==id); render(); }
+function addRoom(){ const n=prompt("New room name:"); if(!n||!n.trim())return; const rooms=getRooms(); if(!rooms.includes(n.trim())) rooms.push(n.trim()); render(); }
+function delRoom(r){ if(S.packing.some(b=>b.room===r)&&!confirm(`Delete "${r}" and its boxes?`))return; S.packing=S.packing.filter(b=>b.room!==r); S.rooms=getRooms().filter(x=>x!==r); render(); }
 
 /* ============ Modals ============ */
 function modal(html){ document.getElementById("modalRoot").innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`; }
@@ -748,6 +752,7 @@ const gv=id=>document.getElementById(id).value;
 
 function openApt(){ modal(`<h3>Add apartment</h3><div class="fg">
   <label class="f full">Name<input id="ap_name" placeholder="Echo Park 2BR"></label>
+  <label class="f full">Listing link (optional)<input id="ap_link" placeholder="https://zillow.com/..."></label>
   <label class="f">Neighborhood<input id="ap_hood"></label>
   <label class="f">Rent /mo<input id="ap_price" type="number"></label>
   <label class="f">Latitude<input id="ap_lat" type="number" step="any" placeholder="34.078"></label>
@@ -757,16 +762,17 @@ function openApt(){ modal(`<h3>Add apartment</h3><div class="fg">
   <div class="tag" style="margin-top:8px;">Tip: right-click a spot in Google Maps to copy lat/long.</div>
   <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveApt()">Add</button></div>`); }
 function saveApt(){ const n=gv("ap_name").trim(); if(!n)return alert("Name required");
-  S.apartments.push({id:uid(),name:n,neighborhood:gv("ap_hood")||"—",price:+gv("ap_price")||0,lat:+gv("ap_lat")||LA[0],lng:+gv("ap_lng")||LA[1],pros:gv("ap_pros").split(",").map(s=>s.trim()).filter(Boolean),cons:gv("ap_cons").split(",").map(s=>s.trim()).filter(Boolean),met:{},fees:[]}); closeModal(); render(); }
+  S.apartments.push({id:uid(),name:n,link:gv("ap_link").trim(),neighborhood:gv("ap_hood")||"—",price:+gv("ap_price")||0,lat:+gv("ap_lat")||LA[0],lng:+gv("ap_lng")||LA[1],pros:gv("ap_pros").split(",").map(s=>s.trim()).filter(Boolean),cons:gv("ap_cons").split(",").map(s=>s.trim()).filter(Boolean),met:{},fees:[]}); closeModal(); render(); }
 
 function openAptEdit(id){ const a=S.apartments.find(x=>x.id===id); modal(`<h3>Edit apartment</h3><div class="fg">
   <label class="f full">Name<input id="ae_name" value="${a.name}"></label>
+  <label class="f full">Listing link (optional)<input id="ae_link" value="${a.link||''}" placeholder="https://zillow.com/..."></label>
   <label class="f">Neighborhood<input id="ae_hood" value="${a.neighborhood}"></label>
   <label class="f">Rent /mo<input id="ae_price" type="number" value="${a.price}"></label>
   <label class="f full">Pros (comma separated)<input id="ae_pros" value="${a.pros.join(', ')}"></label>
   <label class="f full">Cons (comma separated)<input id="ae_cons" value="${a.cons.join(', ')}"></label></div>
   <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveAptEdit('${id}')">Save</button></div>`); }
-function saveAptEdit(id){ const a=S.apartments.find(x=>x.id===id); a.name=gv("ae_name").trim()||a.name; a.neighborhood=gv("ae_hood")||a.neighborhood; a.price=+gv("ae_price")||0; a.pros=gv("ae_pros").split(",").map(s=>s.trim()).filter(Boolean); a.cons=gv("ae_cons").split(",").map(s=>s.trim()).filter(Boolean); closeModal(); render(); }
+function saveAptEdit(id){ const a=S.apartments.find(x=>x.id===id); a.name=gv("ae_name").trim()||a.name; a.link=gv("ae_link").trim(); a.neighborhood=gv("ae_hood")||a.neighborhood; a.price=+gv("ae_price")||0; a.pros=gv("ae_pros").split(",").map(s=>s.trim()).filter(Boolean); a.cons=gv("ae_cons").split(",").map(s=>s.trim()).filter(Boolean); closeModal(); render(); }
 
 function openFriend(){ modal(`<h3>Add friend's place</h3><p class="muted" style="margin-top:-8px;font-size:12.5px;">Shows as a pink dot on the map — hover to see the name.</p><div class="fg">
   <label class="f full">Friend's name<input id="fr_name" placeholder="Maya"></label>
@@ -811,11 +817,11 @@ function openTodo(){ modal(`<h3>Add task</h3><div class="fg">
   <label class="f">Owner<select id="td_owner"><option value="both">Both</option><option value="ava">Ava</option><option value="gab">Gab</option></select></label>
   <label class="f">Deadline<input id="td_due" type="date" value="2026-08-01"></label></div>
   <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveTodo()">Add</button></div>`); }
-function saveTodo(){ const t=gv("td_text").trim(); if(!t)return alert("Task required"); S.todos.push({id:uid(),text:t,status:gv("td_status"),cat:gv("td_cat"),owner:gv("td_owner"),due:gv("td_due")}); closeModal(); render(); }
+function saveTodo(){ const t=gv("td_text").trim(); if(!t)return alert("Task required"); S.todos.push({id:uid(),text:t,status:gv("td_status"),cat:gv("td_cat"),owner:gv("td_owner"),due:y2026(gv("td_due"))}); closeModal(); render(); }
 
 function openBox(room){ modal(`<h3>Add box</h3><div class="fg">
   <label class="f">Box label<input id="bx_label" placeholder="Box 5"></label>
-  <label class="f">Room<select id="bx_room">${opts(ROOMS,room||ROOMS[0])}</select></label>
+  <label class="f">Room<select id="bx_room">${opts(getRooms(),room||getRooms()[0])}</select></label>
   <label class="f">Owner<select id="bx_owner"><option value="both">Both</option><option value="ava">Ava</option><option value="gab">Gab</option></select></label>
   <label class="f full">What's inside<input id="bx_items" placeholder="e.g. books, records"></label></div>
   <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveBox()">Add</button></div>`); }
