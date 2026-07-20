@@ -764,41 +764,69 @@ function modal(html){ document.getElementById("modalRoot").innerHTML=`<div class
 function closeModal(){ document.getElementById("modalRoot").innerHTML=""; }
 const opts=(arr,s)=>arr.map(o=>`<option ${o===s?'selected':''}>${o}</option>`).join("");
 const gv=id=>document.getElementById(id).value;
+// Turn a typed address into map coordinates using free, key-less geocoders.
+async function geocode(q){
+  const timeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error("timeout")),ms))]);
+  // 1) OpenStreetMap Nominatim
+  try{
+    const r=await timeout(fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q="+encodeURIComponent(q),{headers:{"Accept":"application/json"}}),9000);
+    if(r.ok){ const j=await r.json(); if(j&&j[0]&&isFinite(+j[0].lat)&&isFinite(+j[0].lon)) return {lat:+j[0].lat,lng:+j[0].lon}; }
+  }catch(e){}
+  // 2) Komoot Photon fallback (coordinates are [lng,lat])
+  try{
+    const r=await timeout(fetch("https://photon.komoot.io/api/?limit=1&q="+encodeURIComponent(q)),9000);
+    if(r.ok){ const j=await r.json(); const c=j&&j.features&&j.features[0]&&j.features[0].geometry&&j.features[0].geometry.coordinates; if(c&&isFinite(c[0])&&isFinite(c[1])) return {lat:+c[1],lng:+c[0]}; }
+  }catch(e){}
+  return null;
+}
+function setBusy(btnId,on,busyText,idleText){ const b=document.getElementById(btnId); if(!b)return; b.disabled=on; b.textContent=on?busyText:idleText; }
 
 function openApt(){ modal(`<h3>Add apartment</h3><div class="fg">
   <label class="f full">Name<input id="ap_name" placeholder="Echo Park 2BR"></label>
   <label class="f full">Listing link (optional)<input id="ap_link" placeholder="https://zillow.com/..."></label>
+  <label class="f full">Address (for the map)<input id="ap_addr" placeholder="1234 Sunset Blvd, Los Angeles, CA"></label>
   <label class="f">Neighborhood<input id="ap_hood"></label>
   <label class="f">Rent /mo<input id="ap_price" type="number"></label>
-  <label class="f">Latitude<input id="ap_lat" type="number" step="any" placeholder="34.078"></label>
-  <label class="f">Longitude<input id="ap_lng" type="number" step="any" placeholder="-118.26"></label>
   <label class="f full">Pros (comma separated)<input id="ap_pros"></label>
   <label class="f full">Cons (comma separated)<input id="ap_cons"></label></div>
-  <div class="tag" style="margin-top:8px;">Tip: right-click a spot in Google Maps to copy lat/long.</div>
-  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveApt()">Add</button></div>`); }
-function saveApt(){ const n=gv("ap_name").trim(); if(!n)return alert("Name required");
-  S.apartments.push({id:uid(),name:n,link:gv("ap_link").trim(),neighborhood:gv("ap_hood")||"—",price:+gv("ap_price")||0,lat:+gv("ap_lat")||LA[0],lng:+gv("ap_lng")||LA[1],pros:gv("ap_pros").split(",").map(s=>s.trim()).filter(Boolean),cons:gv("ap_cons").split(",").map(s=>s.trim()).filter(Boolean),met:{},fees:[]}); closeModal(); render(); }
+  <div class="tag" id="ap_msg" style="margin-top:8px;">Type the address — the map pin is placed automatically.</div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="ap_save" onclick="saveApt()">Add</button></div>`); }
+async function saveApt(){ const n=gv("ap_name").trim(); if(!n)return alert("Name required");
+  const addr=gv("ap_addr").trim(); let lat=null,lng=null;
+  if(addr){ const m=document.getElementById("ap_msg"); if(m)m.textContent="Finding address…"; setBusy("ap_save",true,"Locating…","Add");
+    const g=await geocode(addr); setBusy("ap_save",false,"Locating…","Add");
+    if(g){ lat=g.lat; lng=g.lng; } else if(!confirm("Couldn't find that address. Add the apartment anyway (no map pin)?")){ if(m)m.textContent="Check the address and try again."; return; } }
+  S.apartments.push({id:uid(),name:n,link:gv("ap_link").trim(),address:addr,neighborhood:gv("ap_hood")||"—",price:+gv("ap_price")||0,lat,lng,pros:gv("ap_pros").split(",").map(s=>s.trim()).filter(Boolean),cons:gv("ap_cons").split(",").map(s=>s.trim()).filter(Boolean),met:{},fees:[]}); closeModal(); render(); }
 
 function openAptEdit(id){ const a=S.apartments.find(x=>x.id===id); modal(`<h3>Edit apartment</h3><div class="fg">
   <label class="f full">Name<input id="ae_name" value="${a.name}"></label>
   <label class="f full">Listing link (optional)<input id="ae_link" value="${a.link||''}" placeholder="https://zillow.com/..."></label>
+  <label class="f full">Address (for the map)<input id="ae_addr" value="${a.address||''}" placeholder="1234 Sunset Blvd, Los Angeles, CA"></label>
   <label class="f">Neighborhood<input id="ae_hood" value="${a.neighborhood}"></label>
   <label class="f">Rent /mo<input id="ae_price" type="number" value="${a.price}"></label>
-  <label class="f">Latitude<input id="ae_lat" type="number" step="any" value="${a.lat!=null?a.lat:''}" placeholder="34.078"></label>
-  <label class="f">Longitude<input id="ae_lng" type="number" step="any" value="${a.lng!=null?a.lng:''}" placeholder="-118.26"></label>
+  <label class="f">Latitude (optional)<input id="ae_lat" type="number" step="any" value="${a.lat!=null?a.lat:''}" placeholder="auto"></label>
+  <label class="f">Longitude (optional)<input id="ae_lng" type="number" step="any" value="${a.lng!=null?a.lng:''}" placeholder="auto"></label>
   <label class="f full">Pros (comma separated)<input id="ae_pros" value="${a.pros.join(', ')}"></label>
   <label class="f full">Cons (comma separated)<input id="ae_cons" value="${a.cons.join(', ')}"></label></div>
-  <div class="tag" style="margin-top:8px;">Right-click a spot in Google Maps to copy lat/long for the map pin.</div>
-  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveAptEdit('${id}')">Save</button></div>`); }
-function saveAptEdit(id){ const a=S.apartments.find(x=>x.id===id); a.name=gv("ae_name").trim()||a.name; a.link=gv("ae_link").trim(); a.neighborhood=gv("ae_hood")||a.neighborhood; a.price=+gv("ae_price")||0; const la=gv("ae_lat"),lo=gv("ae_lng"); if(la!=="") a.lat=+la; if(lo!=="") a.lng=+lo; a.pros=gv("ae_pros").split(",").map(s=>s.trim()).filter(Boolean); a.cons=gv("ae_cons").split(",").map(s=>s.trim()).filter(Boolean); closeModal(); render(); }
+  <div class="tag" id="ae_msg" style="margin-top:8px;">Enter an address to auto-place the pin. (Lat/long below is only for fine-tuning.)</div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="ae_save" onclick="saveAptEdit('${id}')">Save</button></div>`); }
+async function saveAptEdit(id){ const a=S.apartments.find(x=>x.id===id); a.name=gv("ae_name").trim()||a.name; a.link=gv("ae_link").trim(); a.neighborhood=gv("ae_hood")||a.neighborhood; a.price=+gv("ae_price")||0;
+  const addr=gv("ae_addr").trim(), la=gv("ae_lat"), lo=gv("ae_lng"); const addrChanged=addr && addr!==(a.address||"");
+  a.address=addr;
+  if(la!=="") a.lat=+la; if(lo!=="") a.lng=+lo;   // manual override first
+  if(addrChanged){ const m=document.getElementById("ae_msg"); if(m)m.textContent="Finding address…"; setBusy("ae_save",true,"Locating…","Save"); const g=await geocode(addr); setBusy("ae_save",false,"Locating…","Save"); if(g){ a.lat=g.lat; a.lng=g.lng; } else if(!confirm("Couldn't find that address. Save anyway without moving the pin?")){ if(m)m.textContent="Check the address and try again."; return; } }
+  a.pros=gv("ae_pros").split(",").map(s=>s.trim()).filter(Boolean); a.cons=gv("ae_cons").split(",").map(s=>s.trim()).filter(Boolean); closeModal(); render(); }
 
 function openFriend(){ modal(`<h3>Add friend's place</h3><p class="muted" style="margin-top:-8px;font-size:12.5px;">Shows as a pink dot on the map — hover to see the name.</p><div class="fg">
   <label class="f full">Friend's name<input id="fr_name" placeholder="Maya"></label>
-  <label class="f">Latitude<input id="fr_lat" type="number" step="any"></label>
-  <label class="f">Longitude<input id="fr_lng" type="number" step="any"></label></div>
-  <div class="tag" style="margin-top:8px;">Right-click their spot in Google Maps to copy lat/long.</div>
-  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveFriend()">Add pin</button></div>`); }
-function saveFriend(){ const n=gv("fr_name").trim(); if(!n)return alert("Name required"); S.friends=S.friends||[]; S.friends.push({id:uid(),name:n,lat:+gv("fr_lat")||LA[0],lng:+gv("fr_lng")||LA[1]}); closeModal(); render(); }
+  <label class="f full">Address<input id="fr_addr" placeholder="Their street address, city"></label></div>
+  <div class="tag" id="fr_msg" style="margin-top:8px;">Type their address — the pin is placed automatically.</div>
+  <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="fr_save" onclick="saveFriend()">Add pin</button></div>`); }
+async function saveFriend(){ const n=gv("fr_name").trim(); if(!n)return alert("Name required"); const addr=gv("fr_addr").trim(); if(!addr)return alert("Address required");
+  const m=document.getElementById("fr_msg"); if(m)m.textContent="Finding address…"; setBusy("fr_save",true,"Locating…","Add pin");
+  const g=await geocode(addr); setBusy("fr_save",false,"Locating…","Add pin");
+  if(!g){ if(m)m.textContent="Couldn't find that address — check it and try again."; return; }
+  S.friends=S.friends||[]; S.friends.push({id:uid(),name:n,address:addr,lat:g.lat,lng:g.lng}); closeModal(); render(); }
 
 function openCriteria(){ modal(`<h3>Criteria &amp; weights</h3><p class="muted" style="margin-top:-8px;font-size:12.5px;">Add, delete, or re-weight (0–5) what each of you cares about. These are the buttons on every card.</p>
   <table class="btable"><thead><tr><th class="l">Criterion</th><th style="color:var(--ava)">Ava</th><th style="color:var(--gab)">Gab</th><th></th></tr></thead><tbody>
