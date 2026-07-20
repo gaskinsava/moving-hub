@@ -582,8 +582,9 @@ function initMap(){
   mapObj=L.map(el,{scrollWheelZoom:true}).setView(LA,11);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/"+(UI.theme==="dark"?"dark_all":"light_all")+"/{z}/{x}/{y}{r}.png",{attribution:"© OpenStreetMap © CARTO",subdomains:"abcd",maxZoom:19}).addTo(mapObj);
   const pts=[];
-  S.apartments.forEach(a=>{ if(a.lat&&a.lng){ const avg=Math.round((aptScore(a,"ava")+aptScore(a,"gab"))/2); L.marker([a.lat,a.lng]).addTo(mapObj).bindPopup(`<b>${a.name}</b><br>${a.neighborhood} · ${money(aptTotal(a))}/mo<br>Match ${avg}%`); pts.push([a.lat,a.lng]); } });
-  (S.friends||[]).forEach(f=>{ if(f.lat&&f.lng){ L.circleMarker([f.lat,f.lng],{radius:7,color:"#fff",weight:2,fillColor:getComputedStyle(document.body).getPropertyValue('--pink')||'#e884b0',fillOpacity:1}).addTo(mapObj).bindTooltip(`${f.name}'s House`,{className:"friend",direction:"top"}).bindPopup(`${f.name}'s House<br><a href="#" onclick="delFriend('${f.id}');return false;">remove pin</a>`); pts.push([f.lat,f.lng]); } });
+  const validLL=(la,lo)=>typeof la==="number"&&typeof lo==="number"&&isFinite(la)&&isFinite(lo)&&la>=-90&&la<=90&&lo>=-180&&lo<=180;
+  S.apartments.forEach(a=>{ if(validLL(a.lat,a.lng)){ const avg=Math.round((aptScore(a,"ava")+aptScore(a,"gab"))/2); L.marker([a.lat,a.lng]).addTo(mapObj).bindPopup(`<b>${a.name}</b><br>${a.neighborhood} · ${money(aptTotal(a))}/mo<br>Match ${avg}%`); pts.push([a.lat,a.lng]); } });
+  (S.friends||[]).forEach(f=>{ if(validLL(f.lat,f.lng)){ L.circleMarker([f.lat,f.lng],{radius:7,color:"#fff",weight:2,fillColor:getComputedStyle(document.body).getPropertyValue('--pink')||'#e884b0',fillOpacity:1}).addTo(mapObj).bindTooltip(`${f.name}'s House`,{className:"friend",direction:"top"}).bindPopup(`${f.name}'s House<br><a href="#" onclick="delFriend('${f.id}');return false;">remove pin</a>`); pts.push([f.lat,f.lng]); } });
   // Re-measure the container AFTER layout settles, THEN fit — avoids the map
   // initialising at zero size and zooming all the way out.
   const fit=()=>{ if(!mapObj) return; mapObj.invalidateSize(true); if(pts.length===1){ mapObj.setView(pts[0],14); } else if(pts.length>1){ mapObj.fitBounds(pts,{padding:[45,45],maxZoom:14}); } else { mapObj.setView(LA,11); } };
@@ -783,10 +784,13 @@ function openAptEdit(id){ const a=S.apartments.find(x=>x.id===id); modal(`<h3>Ed
   <label class="f full">Listing link (optional)<input id="ae_link" value="${a.link||''}" placeholder="https://zillow.com/..."></label>
   <label class="f">Neighborhood<input id="ae_hood" value="${a.neighborhood}"></label>
   <label class="f">Rent /mo<input id="ae_price" type="number" value="${a.price}"></label>
+  <label class="f">Latitude<input id="ae_lat" type="number" step="any" value="${a.lat!=null?a.lat:''}" placeholder="34.078"></label>
+  <label class="f">Longitude<input id="ae_lng" type="number" step="any" value="${a.lng!=null?a.lng:''}" placeholder="-118.26"></label>
   <label class="f full">Pros (comma separated)<input id="ae_pros" value="${a.pros.join(', ')}"></label>
   <label class="f full">Cons (comma separated)<input id="ae_cons" value="${a.cons.join(', ')}"></label></div>
+  <div class="tag" style="margin-top:8px;">Right-click a spot in Google Maps to copy lat/long for the map pin.</div>
   <div class="row-between" style="margin-top:18px;"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" onclick="saveAptEdit('${id}')">Save</button></div>`); }
-function saveAptEdit(id){ const a=S.apartments.find(x=>x.id===id); a.name=gv("ae_name").trim()||a.name; a.link=gv("ae_link").trim(); a.neighborhood=gv("ae_hood")||a.neighborhood; a.price=+gv("ae_price")||0; a.pros=gv("ae_pros").split(",").map(s=>s.trim()).filter(Boolean); a.cons=gv("ae_cons").split(",").map(s=>s.trim()).filter(Boolean); closeModal(); render(); }
+function saveAptEdit(id){ const a=S.apartments.find(x=>x.id===id); a.name=gv("ae_name").trim()||a.name; a.link=gv("ae_link").trim(); a.neighborhood=gv("ae_hood")||a.neighborhood; a.price=+gv("ae_price")||0; const la=gv("ae_lat"),lo=gv("ae_lng"); if(la!=="") a.lat=+la; if(lo!=="") a.lng=+lo; a.pros=gv("ae_pros").split(",").map(s=>s.trim()).filter(Boolean); a.cons=gv("ae_cons").split(",").map(s=>s.trim()).filter(Boolean); closeModal(); render(); }
 
 function openFriend(){ modal(`<h3>Add friend's place</h3><p class="muted" style="margin-top:-8px;font-size:12.5px;">Shows as a pink dot on the map — hover to see the name.</p><div class="fg">
   <label class="f full">Friend's name<input id="fr_name" placeholder="Maya"></label>
