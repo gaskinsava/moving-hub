@@ -584,10 +584,11 @@ function initMap(){
   const pts=[];
   S.apartments.forEach(a=>{ if(a.lat&&a.lng){ const avg=Math.round((aptScore(a,"ava")+aptScore(a,"gab"))/2); L.marker([a.lat,a.lng]).addTo(mapObj).bindPopup(`<b>${a.name}</b><br>${a.neighborhood} · ${money(aptTotal(a))}/mo<br>Match ${avg}%`); pts.push([a.lat,a.lng]); } });
   (S.friends||[]).forEach(f=>{ if(f.lat&&f.lng){ L.circleMarker([f.lat,f.lng],{radius:7,color:"#fff",weight:2,fillColor:getComputedStyle(document.body).getPropertyValue('--pink')||'#e884b0',fillOpacity:1}).addTo(mapObj).bindTooltip(`${f.name}'s House`,{className:"friend",direction:"top"}).bindPopup(`${f.name}'s House<br><a href="#" onclick="delFriend('${f.id}');return false;">remove pin</a>`); pts.push([f.lat,f.lng]); } });
-  if(pts.length) mapObj.fitBounds(pts,{padding:[45,45],maxZoom:12});
-  mapObj.whenReady(()=>mapObj.invalidateSize());
-  setTimeout(()=>mapObj.invalidateSize(),150);
-  setTimeout(()=>mapObj.invalidateSize(),600);
+  // Re-measure the container AFTER layout settles, THEN fit — avoids the map
+  // initialising at zero size and zooming all the way out.
+  const fit=()=>{ if(!mapObj) return; mapObj.invalidateSize(true); if(pts.length===1){ mapObj.setView(pts[0],14); } else if(pts.length>1){ mapObj.fitBounds(pts,{padding:[45,45],maxZoom:14}); } else { mapObj.setView(LA,11); } };
+  requestAnimationFrame(()=>requestAnimationFrame(fit));
+  setTimeout(fit,250); setTimeout(fit,600);
   window.addEventListener("resize",()=>mapObj&&mapObj.invalidateSize());
 }
 function toggleMet(a,c){ const ap=S.apartments.find(x=>x.id===a); ap.met=ap.met||{}; ap.met[c]=!ap.met[c]; render(); }
