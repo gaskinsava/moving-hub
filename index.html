@@ -655,19 +655,22 @@ function renderQuotes(){
     const qs=S.quotes.filter(q=>q.type===type); const min=Math.min(...qs.map(q=>q.price));
     return `<div class="section-label eyebrow">${type} quotes</div>
     <div class="card" style="overflow:hidden;margin-bottom:8px;"><table class="btable">
-      <thead class="bhead"><tr><th class="l">Company</th><th>Price</th><th>Rating</th><th class="l">Notes</th><th>Pick</th><th></th></tr></thead>
+      <thead class="bhead"><tr><th class="l">Company</th><th>Price</th><th>Rating</th><th class="l">Notes</th><th class="l">Link</th><th>Pick</th><th></th></tr></thead>
       <tbody>${qs.map(q=>`<tr ondragover="dragOver(event,this)" ondrop="dragDrop(event,'quotes','${q.id}','type')">
-        <td class="l">${dragHandle('quotes',q.id)}<strong>${q.company}</strong>${q.link?` <a href="${q.link}" target="_blank">↗</a>`:""}</td>
-        <td class="money">${money(q.price)} ${q.price===min?'<span class="pill good">lowest</span>':''}</td>
-        <td>${"★".repeat(Math.round(q.rating))}<span class="tag"> ${q.rating}</span></td>
-        <td class="l muted">${q.note||"—"}</td>
+        <td class="l">${dragHandle('quotes',q.id)}<input class="bare" style="width:calc(100% - 22px);font-weight:600" value="${q.company||''}" onchange="setQuote('${q.id}','company',this.value)"></td>
+        <td><input class="bare numin money" style="width:82px" value="${money(q.price)}" onchange="setQuoteMoney('${q.id}',this.value)"> ${q.price>0&&q.price===min?'<span class="pill good">lowest</span>':''}</td>
+        <td><input class="bare numin" style="width:56px" type="number" step="0.1" min="0" max="5" value="${q.rating!=null?q.rating:''}" onchange="setQuote('${q.id}','rating',+this.value||0)"></td>
+        <td class="l"><input class="bare" value="${q.note||''}" placeholder="notes" onchange="setQuote('${q.id}','note',this.value)"></td>
+        <td class="l">${q.link?`<a href="${q.link}" target="_blank">open ↗</a> `:""}<input class="bare" style="width:120px" placeholder="paste link" value="${q.link||''}" onchange="setQuote('${q.id}','link',this.value)"></td>
         <td><span class="pill ${q.chosen?'good':''} click" onclick="chooseQuote('${q.id}')">${q.chosen?'✓ chosen':'choose'}</span></td>
-        <td><button class="del" onclick="delQuote('${q.id}')">×</button></td></tr>`).join("")||`<tr><td colspan="6" class="empty">No ${type.toLowerCase()} quotes yet</td></tr>`}
+        <td><button class="del" onclick="delQuote('${q.id}')">×</button></td></tr>`).join("")||`<tr><td colspan="7" class="empty">No ${type.toLowerCase()} quotes yet</td></tr>`}
       </tbody></table></div>
       <button class="btn ghost mini" style="margin-bottom:6px;" onclick="openQuote('${type}')">+ Add ${type.toLowerCase()} quote</button>`;
   }).join("");
 }
 function chooseQuote(id){ const q=S.quotes.find(x=>x.id===id); S.quotes.filter(x=>x.type===q.type).forEach(x=>x.chosen=false); q.chosen=true; render(); }
+function setQuote(id,f,v){ S.quotes.find(x=>x.id===id)[f]=v; render(); }
+function setQuoteMoney(id,v){ S.quotes.find(x=>x.id===id).price=parseMoney(v); render(); }
 function delQuote(id){ S.quotes=S.quotes.filter(x=>x.id!==id); render(); }
 
 /* ============ LISTINGS ============ */
@@ -866,10 +869,11 @@ function openEvent(){
       <label class="f">Type<select id="ev_type"><option value="apartments">Apartment</option><option value="movers">Movers</option><option value="flights">Flights</option><option value="car">Cars</option><option value="other">Other</option></select></label>
     </div>
     <button class="btn primary" style="margin-top:12px;width:100%" onclick="saveEvent()">+ Add milestone</button>
-    <div style="margin-top:16px;">${evs.length?`<div class="eyebrow" style="margin-bottom:6px;">On your timeline</div>`+evs.map(e=>`<div class="row-between" style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);"><span><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor(e.type)};margin-right:8px"></i>${fmtShort(e.date)} · ${e.title}</span><button class="del" onclick="delEvent('${e.id}')">×</button></div>`).join(""):`<div class="empty" style="padding:14px">No milestones yet</div>`}</div>
+    <div style="margin-top:16px;">${evs.length?`<div class="eyebrow" style="margin-bottom:6px;">On your timeline — click to edit</div>`+evs.map(e=>`<div style="display:flex;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--border);"><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor(e.type)};flex-shrink:0"></i><input class="bare" style="flex:1;font-size:13px" value="${e.title}" onchange="setEvent('${e.id}','title',this.value)"><input class="bare" type="date" style="width:140px;font-size:12px" value="${e.date}" onchange="setEvent('${e.id}','date',y2026(this.value))"><select class="sel" style="font-size:11px" onchange="setEvent('${e.id}','type',this.value)"><option value="apartments" ${e.type==='apartments'?'selected':''}>Apt</option><option value="movers" ${e.type==='movers'?'selected':''}>Movers</option><option value="flights" ${e.type==='flights'?'selected':''}>Flights</option><option value="car" ${e.type==='car'?'selected':''}>Cars</option><option value="other" ${e.type==='other'?'selected':''}>Other</option></select><button class="del" onclick="delEvent('${e.id}')">×</button></div>`).join(""):`<div class="empty" style="padding:14px">No milestones yet</div>`}</div>
     <div class="row-between" style="margin-top:16px;"><span></span><button class="btn ghost" onclick="closeModal()">Done</button></div>`);
 }
 function saveEvent(){ const t=gv("ev_title").trim(); if(!t)return alert("Title required"); S.events.push({id:uid(),title:t,date:y2026(gv("ev_date")),type:gv("ev_type")}); render(); openEvent(); }
+function setEvent(id,f,v){ const e=S.events.find(x=>x.id===id); if(e){ e[f]=v; render(); } }
 function delEvent(id){ S.events=S.events.filter(e=>e.id!==id); render(); openEvent(); }
 
 function openTodo(){ modal(`<h3>Add task</h3><div class="fg">
